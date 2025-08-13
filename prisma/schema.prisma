@@ -1,0 +1,200 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== Enums =====
+enum Role {
+  ADMIN
+  USER
+}
+
+enum StatusAntrean {
+  MENUNGGU
+  DIPROSES
+  SELESAI
+  DIBATALKAN
+}
+
+// ===== Models =====
+model User {
+  id_user       String   @id @default(uuid())
+  nama          String
+  email         String   @unique
+  tanggal_lahir DateTime
+  jenis_kelamin String
+  no_telepon    String
+  alamat        String?
+  password      String
+  role          Role     @default(USER)
+  id_layanan    String?
+  id_tanggungan String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  layanan    Layanan?    @relation(fields: [id_layanan], references: [id_layanan], onDelete: SetNull)
+  tanggungan Tanggungan? @relation(fields: [id_tanggungan], references: [id_tanggungan], onDelete: SetNull)
+  antrean    Antrean[]   @relation("UserAntrean")
+
+  @@index([id_layanan])
+  @@index([id_tanggungan])
+}
+
+model Layanan {
+  id_layanan      String    @id @default(uuid())
+  nama_layanan    String
+  is_active       Boolean   @default(true)
+  deletedAt       DateTime?
+  alasan_nonaktif String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  users   User[]
+  antrean Antrean[]
+
+  @@unique([nama_layanan])
+  @@index([nama_layanan])
+  @@index([is_active])
+}
+
+model Tanggungan {
+  id_tanggungan   String    @id @default(uuid())
+  nama_tanggungan String
+  is_active       Boolean   @default(true)
+  deletedAt       DateTime?
+  alasan_nonaktif String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  users   User[]
+  antrean Antrean[] // <— back-reference ke Antrean
+
+  @@unique([nama_tanggungan])
+  @@index([nama_tanggungan])
+  @@index([is_active])
+}
+
+model Dokter {
+  id_dokter       String    @id @default(uuid())
+  nama_dokter     String
+  spesialisasi    String
+  is_active       Boolean   @default(true)
+  deletedAt       DateTime?
+  alasan_nonaktif String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  antrean        Antrean[]
+  jadwal_praktik JadwalPraktik[] // <-- tetap
+  // slot_praktik  SlotPraktik[]    // <-- HAPUS karena SlotPraktik tidak lagi punya id_dokter
+
+  @@index([nama_dokter])
+  @@index([spesialisasi])
+  @@index([is_active])
+}
+
+model JadwalPraktik {
+  id_jadwal   String   @id @default(uuid())
+  id_dokter   String
+  tanggal     DateTime
+  jam_mulai   DateTime
+  jam_selesai DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  dokter Dokter @relation(fields: [id_dokter], references: [id_dokter], onDelete: Cascade)
+
+  // Back relation ke SlotPraktik (satu jadwal maksimal punya satu slot)
+  slot SlotPraktik?
+
+  @@index([id_dokter, tanggal])
+}
+
+model SlotPraktik {
+  id_slot   String   @id @default(uuid())
+  id_jadwal String
+  kapasitas Int      @default(1)
+  terisi    Int      @default(0) // <— NEW: jumlah kursi yang sudah terpakai
+  is_active Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  jadwal  JadwalPraktik @relation(fields: [id_jadwal], references: [id_jadwal], onDelete: Cascade)
+  antrean Antrean[]
+
+  @@unique([id_jadwal]) // satu slot per jadwal
+  @@index([id_jadwal])
+}
+
+model Antrean {
+  id_antrean        String        @id @default(uuid())
+  id_user           String
+  id_dokter         String
+  id_layanan        String
+  id_tanggungan     String?
+  id_slot           String // wajib: kaitkan ke slot
+  tanggal_kunjungan DateTime // denormalisasi = jam_mulai slot
+  status            StatusAntrean @default(MENUNGGU)
+  alamat_user       String
+
+  // Audit
+  dokter_nama_snapshot String?
+  alasan_batal         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  user       User        @relation("UserAntrean", fields: [id_user], references: [id_user], onDelete: Restrict)
+  dokter     Dokter      @relation(fields: [id_dokter], references: [id_dokter], onDelete: Restrict)
+  layanan    Layanan     @relation(fields: [id_layanan], references: [id_layanan], onDelete: Restrict)
+  tanggungan Tanggungan? @relation(fields: [id_tanggungan], references: [id_tanggungan], onDelete: SetNull)
+  slot       SlotPraktik @relation(fields: [id_slot], references: [id_slot], onDelete: Restrict)
+
+  // Cegah pasien ambil slot yang sama dua kali
+  @@unique([id_user, id_slot])
+  // (Opsional) cegah pasien double-book pada waktu yang sama (slot beda tapi jam sama)
+  @@unique([id_user, tanggal_kunjungan])
+  @@index([id_slot])
+  @@index([id_user])
+  @@index([id_dokter])
+  @@index([id_layanan])
+  @@index([id_tanggungan])
+  @@index([tanggal_kunjungan])
+  @@index([status, tanggal_kunjungan])
+  @@index([id_slot, createdAt]) // untuk hitung posisi cepat
+}
+
+model BeritaKesehatan {
+  id_berita          String   @id @default(uuid())
+  judul              String
+  deskripsi          String
+  tanggal_penerbitan DateTime
+  foto_url           String   @db.LongText
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+
+  @@index([tanggal_penerbitan])
+}
+
+model VideoKesehatan {
+  id_video           String   @id @default(uuid())
+  judul              String
+  deskripsi          String
+  tanggal_penerbitan DateTime
+  video_url          String   @db.LongText
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+
+  @@index([tanggal_penerbitan])
+}
