@@ -32,7 +32,7 @@ model User {
   id_user       String   @id @default(uuid())
   nama          String
   email         String   @unique
-  tanggal_lahir DateTime
+  tanggal_lahir DateTime @db.Date
   jenis_kelamin String
   no_telepon    String
   alamat        String?
@@ -78,7 +78,7 @@ model Tanggungan {
   updatedAt       DateTime  @default(now()) @updatedAt
 
   users   User[]
-  antrean Antrean[] // <— back-reference ke Antrean
+  antrean Antrean[]
 
   @@unique([nama_tanggungan])
   @@index([nama_tanggungan])
@@ -86,18 +86,18 @@ model Tanggungan {
 }
 
 model Dokter {
-  id_dokter       String    @id @default(uuid())
-  nama_dokter     String
-  spesialisasi    String
-  is_active       Boolean   @default(true)
-  deletedAt       DateTime?
-  alasan_nonaktif String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now()) @updatedAt
+  id_dokter          String    @id @default(uuid())
+  nama_dokter        String
+  spesialisasi       String
+  foto_profil_dokter String?   @db.LongText
+  is_active          Boolean   @default(true)
+  deletedAt          DateTime?
+  alasan_nonaktif    String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
 
   antrean        Antrean[]
-  jadwal_praktik JadwalPraktik[] // <-- tetap
-  // slot_praktik  SlotPraktik[]    // <-- HAPUS karena SlotPraktik tidak lagi punya id_dokter
+  jadwal_praktik JadwalPraktik[]
 
   @@index([nama_dokter])
   @@index([spesialisasi])
@@ -107,16 +107,14 @@ model Dokter {
 model JadwalPraktik {
   id_jadwal   String   @id @default(uuid())
   id_dokter   String
-  tanggal     DateTime
+  tanggal     DateTime @db.Date
   jam_mulai   DateTime
   jam_selesai DateTime
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
 
   dokter Dokter @relation(fields: [id_dokter], references: [id_dokter], onDelete: Cascade)
-
-  // Back relation ke SlotPraktik (satu jadwal maksimal punya satu slot)
-  slot SlotPraktik?
+  slot   SlotPraktik?
 
   @@index([id_dokter, tanggal])
 }
@@ -125,7 +123,7 @@ model SlotPraktik {
   id_slot   String   @id @default(uuid())
   id_jadwal String
   kapasitas Int      @default(1)
-  terisi    Int      @default(0) // <— NEW: jumlah kursi yang sudah terpakai
+  terisi    Int      @default(0)
   is_active Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -138,19 +136,27 @@ model SlotPraktik {
 }
 
 model Antrean {
-  id_antrean        String        @id @default(uuid())
-  id_user           String
-  id_dokter         String
-  id_layanan        String
-  id_tanggungan     String?
-  id_slot           String // wajib: kaitkan ke slot
-  tanggal_kunjungan DateTime // denormalisasi = jam_mulai slot
-  status            StatusAntrean @default(MENUNGGU)
-  alamat_user       String
+  id_antrean     String        @id @default(uuid())
+  id_user        String
+  id_dokter      String
+  id_layanan     String
+  id_tanggungan  String?
+  id_slot        String
+  tanggal_lahir  DateTime      @db.Date
+  status         StatusAntrean @default(MENUNGGU)
+  alamat_user    String
 
-  // Audit
+  // Snapshot / audit
   dokter_nama_snapshot String?
   alasan_batal         String?
+
+  // --- Snapshot pasien (WAJIB untuk identitas) ---
+  nama_pasien   String
+  jenis_kelamin String
+  telepon       String
+
+  // Nomor urut di dalam satu slot (1,2,3,...) — diisi saat create
+  no_antrean Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -161,25 +167,30 @@ model Antrean {
   tanggungan Tanggungan? @relation(fields: [id_tanggungan], references: [id_tanggungan], onDelete: SetNull)
   slot       SlotPraktik @relation(fields: [id_slot], references: [id_slot], onDelete: Restrict)
 
-  // Cegah pasien ambil slot yang sama dua kali
-  @@unique([id_user, id_slot])
-  // (Opsional) cegah pasien double-book pada waktu yang sama (slot beda tapi jam sama)
-  @@unique([id_user, tanggal_kunjungan])
+  // ===== Aturan unik =====
+  // Unik per slot berdasarkan identitas pasien (bukan akun)
+  @@unique([id_slot, nama_pasien, tanggal_lahir, status])
+
+  // Nomor antrean unik per slot; NULL diperbolehkan
+  @@unique([id_slot, no_antrean])
+
+  // ===== Index bantu =====
   @@index([id_slot])
   @@index([id_user])
   @@index([id_dokter])
   @@index([id_layanan])
   @@index([id_tanggungan])
-  @@index([tanggal_kunjungan])
-  @@index([status, tanggal_kunjungan])
-  @@index([id_slot, createdAt]) // untuk hitung posisi cepat
+  @@index([tanggal_lahir])
+  @@index([status, tanggal_lahir])
+  @@index([id_slot, createdAt])
 }
+
 
 model BeritaKesehatan {
   id_berita          String   @id @default(uuid())
   judul              String
   deskripsi          String
-  tanggal_penerbitan DateTime
+  tanggal_penerbitan DateTime @db.Date
   foto_url           String   @db.LongText
   createdAt          DateTime @default(now())
   updatedAt          DateTime @default(now()) @updatedAt
@@ -191,7 +202,7 @@ model VideoKesehatan {
   id_video           String   @id @default(uuid())
   judul              String
   deskripsi          String
-  tanggal_penerbitan DateTime
+  tanggal_penerbitan DateTime @db.Date
   video_url          String   @db.LongText
   createdAt          DateTime @default(now())
   updatedAt          DateTime @default(now()) @updatedAt

@@ -1,15 +1,18 @@
 'use client';
 
 import React from 'react';
-import { Card, Space, Typography, Tag, Button, Row, Col, Tabs, Table, message, Modal, Form, Input } from 'antd';
-import { CheckCircleOutlined, StopOutlined, EditOutlined, PlusOutlined, SwapOutlined } from '@ant-design/icons';
+import { Card, Space, Typography, Tag, Button, Row, Col, Tabs, Table, message, Modal, Form, Input, Avatar, Image } from 'antd';
+import { CheckCircleOutlined, StopOutlined, EditOutlined, PlusOutlined, SwapOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 
 import { useDokterDetail } from './components/DokterDetailContainer';
 import JadwalPraktikTable from './components/JadwalTable';
 import SlotPraktikTable from './components/SlotTable';
 import PraktikDrawer, { PraktikDrawerMode, PraktikTab } from './components/PraktikDrawer';
 import DokterFormDrawer from '../components/DoctorFormDrawer';
+
+dayjs.extend(utc);
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -22,11 +25,14 @@ type Riwayat = {
   keterangan?: string | null;
 };
 
+// Helper aman timezone (ISO UTC → tampil konsisten)
+const fmtDate = (iso?: string) => (iso ? dayjs.utc(iso).format('DD MMM YYYY') : '');
+const fmtTime = (iso?: string) => (iso ? dayjs.utc(iso).format('HH:mm') : '');
+
 export default function DetailDokterPage({ params }: { params: { id: string } }) {
   const dokterId = params.id;
   const { loading, dokter, jadwal, slotAktif, slotNonaktif, riwayat, nonaktifkan, aktifkan, saveProfile, submitPraktik, toggleSlot, deleteSlot, deleteJadwal, jadwalOptions } = useDokterDetail(dokterId);
 
-  // header tag
   const headerTag = dokter?.is_active ? (
     <Tag
       color='success'
@@ -40,6 +46,7 @@ export default function DetailDokterPage({ params }: { params: { id: string } })
 
   // Edit Profil
   const [editOpen, setEditOpen] = React.useState(false);
+  const [savingProfile, setSavingProfile] = React.useState(false);
 
   // Nonaktif modal
   const [modalOpen, setModalOpen] = React.useState(false);
@@ -52,6 +59,7 @@ export default function DetailDokterPage({ params }: { params: { id: string } })
   const [initialJadwal, setInitialJadwal] = React.useState<{ tanggal: string; jam_mulai: string; jam_selesai: string } | undefined>();
   const [initialSlot, setInitialSlot] = React.useState<{ id_jadwal: string; kapasitas: number } | undefined>();
   const [editIds, setEditIds] = React.useState<{ jadwalId?: string; slotId?: string }>({});
+  const [currentJadwalLabel, setCurrentJadwalLabel] = React.useState<string | undefined>(undefined);
 
   const openCreatePraktik = () => {
     setPraktikMode('create');
@@ -59,6 +67,7 @@ export default function DetailDokterPage({ params }: { params: { id: string } })
     setInitialJadwal(undefined);
     setInitialSlot(undefined);
     setEditIds({});
+    setCurrentJadwalLabel(undefined);
     setPraktikOpen(true);
   };
 
@@ -68,21 +77,27 @@ export default function DetailDokterPage({ params }: { params: { id: string } })
     setInitialJadwal({ tanggal: row.tanggal, jam_mulai: row.jam_mulai, jam_selesai: row.jam_selesai });
     setInitialSlot(undefined);
     setEditIds({ jadwalId: row.id_jadwal });
+    setCurrentJadwalLabel(undefined);
     setPraktikOpen(true);
   };
 
-  const openEditSlot = (row: { id_slot: string; id_jadwal?: string; kapasitas: number }) => {
+  const openEditSlot = (row: { id_slot: string; id_jadwal?: string; kapasitas: number; tanggal?: string; jam_mulai?: string; jam_selesai?: string }) => {
     setPraktikMode('edit');
     setPraktikTab('slot');
     setInitialJadwal(undefined);
     setInitialSlot({ id_jadwal: row.id_jadwal || '', kapasitas: row.kapasitas });
     setEditIds({ slotId: row.id_slot });
+
+    // Label aman timezone
+    setCurrentJadwalLabel(`${fmtDate(row.tanggal)} • ${fmtTime(row.jam_mulai)}–${fmtTime(row.jam_selesai)}`);
+
     setPraktikOpen(true);
   };
 
   const handleSubmitPraktik = async (p: { type: 'jadwal' | 'slot'; mode: PraktikDrawerMode; id?: string; data: any }) => {
     await submitPraktik(p);
-    setPraktikOpen(false); // close setelah sukses
+    setPraktikOpen(false);
+    setCurrentJadwalLabel(undefined);
   };
 
   const submitNonaktif = async () => {
@@ -108,6 +123,24 @@ export default function DetailDokterPage({ params }: { params: { id: string } })
           gutter={[16, 16]}
           align='middle'
         >
+          <Col>
+            {dokter?.foto_profil_dokter ? (
+              <Image
+                src={dokter.foto_profil_dokter}
+                alt='Foto profil dokter'
+                width={96}
+                height={96}
+                style={{ objectFit: 'cover', borderRadius: 8 }}
+              />
+            ) : (
+              <Avatar
+                shape='square'
+                size={96}
+                icon={<UserOutlined />}
+                style={{ background: '#f0f0f0', color: '#555' }}
+              />
+            )}
+          </Col>
           <Col flex='auto'>
             <Space
               direction='vertical'
@@ -201,7 +234,7 @@ export default function DetailDokterPage({ params }: { params: { id: string } })
                 loading={loading}
                 columns={
                   [
-                    { title: 'Waktu', dataIndex: 'waktu', key: 'waktu', render: (v: string) => dayjs(v).format('DD MMM YYYY HH:mm') },
+                    { title: 'Waktu', dataIndex: 'waktu', key: 'waktu', render: (v: string) => dayjs.utc(v).format('DD MMM YYYY HH:mm') },
                     { title: 'Pasien', dataIndex: 'nama_user', key: 'nama_user' },
                     { title: 'Keterangan', dataIndex: 'keterangan', key: 'keterangan' },
                   ] as any
@@ -215,23 +248,40 @@ export default function DetailDokterPage({ params }: { params: { id: string } })
         ]}
       />
 
-      {/* Drawer Edit Profil (pakai DokterFormDrawer) */}
+      {/* Drawer Edit Profil */}
       <DokterFormDrawer
         open={editOpen}
-        loading={loading}
-        editing={dokter ? { id_dokter: dokter.id_dokter, nama_dokter: dokter.nama_dokter, spesialisasi: dokter.spesialisasi } : null}
+        loading={loading || savingProfile}
+        editing={
+          dokter
+            ? {
+                id_dokter: dokter.id_dokter,
+                nama_dokter: dokter.nama_dokter,
+                spesialisasi: dokter.spesialisasi,
+                foto_profil_dokter: dokter.foto_profil_dokter ?? null,
+              }
+            : null
+        }
         onClose={() => setEditOpen(false)}
-        onSubmit={async (v) => {
-          await saveProfile(v);
-          setEditOpen(false);
+        onSubmit={async (v, file) => {
+          setSavingProfile(true);
+          try {
+            await saveProfile(v, file);
+            setEditOpen(false);
+          } finally {
+            setSavingProfile(false);
+          }
         }}
       />
 
-      {/* Drawer Praktik terpadu (create/edit jadwal/slot) */}
+      {/* Drawer Praktik terpadu */}
       <PraktikDrawer
         open={praktikOpen}
         loading={loading}
-        onClose={() => setPraktikOpen(false)}
+        onClose={() => {
+          setPraktikOpen(false);
+          setCurrentJadwalLabel(undefined);
+        }}
         onSubmit={handleSubmitPraktik}
         jadwalOptions={jadwalOptions}
         mode={praktikMode}
@@ -240,6 +290,7 @@ export default function DetailDokterPage({ params }: { params: { id: string } })
         initialSlot={initialSlot}
         editIds={editIds}
         disableChangeJadwal
+        currentJadwalLabel={currentJadwalLabel}
       />
 
       {/* Modal Nonaktif Dokter */}

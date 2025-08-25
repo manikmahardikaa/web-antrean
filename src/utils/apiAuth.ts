@@ -105,4 +105,64 @@ export const apiAuth = {
     if (!res.ok) throw new Error(data.message || 'Gagal menghapus data (auth)');
     return data;
   },
+
+  async postDataPrivateWithFile<T = any>(
+    url: string,
+    formData: FormData,
+    onExpired: OnExpiredCallback = () => {
+      window.location.href = '/login';
+    }
+  ): Promise<ApiResponse<T>> {
+    const token = await jwtStorage.retrieveToken(onExpired);
+    if (!token) return { isExpiredJWT: true };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        // PENTING: JANGAN set 'Content-Type' untuk FormData
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    // Tangani response yang mungkin bukan JSON (jaga-jaga)
+    const ct = res.headers.get('content-type') || '';
+    const payload = ct.includes('application/json') ? await res.json() : await res.text();
+
+    if (!res.ok) {
+      const msg = typeof payload === 'object' && payload && 'message' in payload ? (payload as any).message : 'Gagal upload file (auth)';
+      throw new Error(msg);
+    }
+    return payload as T;
+  },
+
+  // utils/apiAuth.ts
+  async putDataPrivateWithFile<T = any>(
+    url: string,
+    formData: FormData,
+    onExpired: OnExpiredCallback = () => {
+      window.location.href = '/login';
+    }
+  ): Promise<ApiResponse<T>> {
+    const token = await jwtStorage.retrieveToken(onExpired);
+    if (!token) return { isExpiredJWT: true };
+
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        // JANGAN set 'Content-Type' untuk FormData
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const ct = res.headers.get('content-type') || '';
+    const payload = ct.includes('application/json') ? await res.json() : await res.text();
+
+    if (!res.ok) {
+      const msg = typeof payload === 'object' && payload && 'message' in payload ? (payload as any).message : 'Gagal upload file (PUT)';
+      throw new Error(msg);
+    }
+    return payload as T;
+  },
 };

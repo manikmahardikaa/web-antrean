@@ -3,9 +3,12 @@
 import React from 'react';
 import { message } from 'antd';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 import { apiAuth } from '@/utils/apiAuth';
 import { ApiEndpoints } from '@/constraints/api-endpoints';
 import type { Slot as SlotRow } from './SlotTable';
+
+dayjs.extend(utc);
 
 export type Dokter = {
   id_dokter: string;
@@ -14,12 +17,13 @@ export type Dokter = {
   is_active: boolean;
   alasan_nonaktif?: string | null;
   deletedAt?: string | null;
+  foto_profil_dokter?: string | null;
 };
 
 export type Jadwal = {
   id_jadwal: string;
   id_dokter: string;
-  tanggal: string;
+  tanggal: string; // dari API
   jam_mulai: string;
   jam_selesai: string;
 };
@@ -31,6 +35,19 @@ export type Riwayat = {
   waktu: string;
   keterangan?: string | null;
 };
+
+/** ==== FIX INTI: pakukan tanggal ke UTC midnight ==== */
+function toUTCDateOnly(input: any): Date {
+  const d = dayjs(input);
+  // Buat Date di UTC 00:00 agar tidak kena offset zona waktu
+  return new Date(Date.UTC(d.year(), d.month(), d.date()));
+}
+
+function toHHmm(input: any): string {
+  // Terima string/Date/dayjs → hasilkan 'HH:mm'
+  const d = dayjs(input);
+  return d.isValid() ? d.format('HH:mm') : String(input ?? '');
+}
 
 const toSlotRow = (x: any): SlotRow => {
   const terisi = typeof x?.terisi === 'number' ? x.terisi : 0;
@@ -50,9 +67,24 @@ const toSlotRow = (x: any): SlotRow => {
   };
 };
 
+/** Izinkan form mengirim string/Date/dayjs */
 export type PraktikSubmit =
-  | { type: 'jadwal'; mode: 'create' | 'edit'; id?: string; data: { tanggal: string; jam_mulai: string; jam_selesai: string } }
-  | { type: 'slot'; mode: 'create' | 'edit'; id?: string; data: { id_jadwal: string; kapasitas: number; is_active?: boolean } };
+  | {
+      type: 'jadwal';
+      mode: 'create' | 'edit';
+      id?: string;
+      data: {
+        tanggal: string | Date; // ← fleksibel
+        jam_mulai: string | Date; // ← fleksibel
+        jam_selesai: string | Date; // ← fleksibel
+      };
+    }
+  | {
+      type: 'slot';
+      mode: 'create' | 'edit';
+      id?: string;
+      data: { id_jadwal: string; kapasitas: number; is_active?: boolean };
+    };
 
 export function useDokterDetail(dokterId: string) {
   const [loading, setLoading] = React.useState(false);
@@ -61,6 +93,7 @@ export function useDokterDetail(dokterId: string) {
   const [slotAktif, setSlotAktif] = React.useState<SlotRow[]>([]);
   const [slotNonaktif, setSlotNonaktif] = React.useState<SlotRow[]>([]);
   const [riwayat, setRiwayat] = React.useState<Riwayat[]>([]);
+  // di atas, bareng state lainnya
 
   const load = React.useCallback(async () => {
     try {
@@ -119,14 +152,23 @@ export function useDokterDetail(dokterId: string) {
     }
   };
 
-  const saveProfile = async (values: { nama_dokter: string; spesialisasi: string }) => {
+  const saveProfile = async (values: { nama_dokter: string; spesialisasi: string }, file?: File | null) => {
     try {
       setLoading(true);
-      const res = await apiAuth.putDataPrivate(ApiEndpoints.UpdateDokter(dokterId), {
-        nama_dokter: values.nama_dokter.trim(),
-        spesialisasi: values.spesialisasi.trim(),
-      });
-      if (res?.message && !res?.id_dokter) throw new Error(res.message);
+
+      if (file) {
+        const fd = new FormData();
+        fd.append('nama_dokter', values.nama_dokter.trim());
+        fd.append('spesialisasi', values.spesialisasi.trim());
+        fd.append('file', file);
+        await apiAuth.putDataPrivateWithFile(ApiEndpoints.UpdateDokter(dokterId), fd);
+      } else {
+        await apiAuth.putDataPrivate(ApiEndpoints.UpdateDokter(dokterId), {
+          nama_dokter: values.nama_dokter.trim(),
+          spesialisasi: values.spesialisasi.trim(),
+        });
+      }
+
       message.success('Profil dokter diperbarui');
       await load();
     } catch (e: any) {
@@ -140,12 +182,19 @@ export function useDokterDetail(dokterId: string) {
     try {
       setLoading(true);
       if (p.type === 'jadwal') {
+        // ====== NORMALISASI PAYLOAD JADWAL ======
+        const payload = {
+          tanggal: toUTCDateOnly(p.data.tanggal), // <— kunci: UTC 00:00
+          jam_mulai: toHHmm(p.data.jam_mulai),
+          jam_selesai: toHHmm(p.data.jam_selesai),
+        };
+
         if (p.mode === 'edit' && p.id) {
-          const res = await apiAuth.putDataPrivate(ApiEndpoints.UpdateJadwalPraktik(p.id), p.data);
+          const res = await apiAuth.putDataPrivate(ApiEndpoints.UpdateJadwalPraktik(p.id), payload);
           if (res?.message && !res?.id_jadwal) throw new Error(res.message);
           message.success('Jadwal diperbarui');
         } else {
-          const res = await apiAuth.postDataPrivate(ApiEndpoints.CreateJadwalPraktik, { ...p.data, id_dokter: dokterId });
+          const res = await apiAuth.postDataPrivate(ApiEndpoints.CreateJadwalPraktik, { ...payload, id_dokter: dokterId });
           if (!res || (!res.id_jadwal && !res.ok)) throw new Error(res?.message || 'Gagal menyimpan jadwal');
           message.success('Jadwal ditambahkan');
         }
@@ -155,7 +204,7 @@ export function useDokterDetail(dokterId: string) {
           if (res?.message && !res?.id_slot) throw new Error(res.message);
           message.success('Slot diperbarui');
         } else {
-          const res = await apiAuth.postDataPrivate(ApiEndpoints.CreateSlotPraktik, p.data); // expects id_jadwal
+          const res = await apiAuth.postDataPrivate(ApiEndpoints.CreateSlotPraktik, p.data);
           if (!res || (!res.id_slot && !res.ok)) throw new Error(res?.message || 'Gagal menyimpan slot');
           message.success('Slot ditambahkan');
         }

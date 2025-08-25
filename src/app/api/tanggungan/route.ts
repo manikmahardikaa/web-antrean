@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { withRole } from '@/lib/middleware/withRole';
 import jwt from 'jsonwebtoken';
 void jwt;
 
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
 }
 
 // POST (ADMIN): { nama_tanggungan }
-import { withRole } from '@/lib/middleware/withRole';
+
 export const POST = withRole('ADMIN')(async (req: Request) => {
   try {
     const body = await req.json().catch(() => ({}));

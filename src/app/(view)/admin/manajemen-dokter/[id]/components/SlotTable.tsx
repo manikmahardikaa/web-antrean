@@ -3,22 +3,32 @@
 import { Table, Space, Button, Empty, Tag, Switch, Tooltip, Typography, Divider } from 'antd';
 import { DeleteOutlined, CheckCircleOutlined, EditOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 import 'dayjs/locale/id';
 
+dayjs.extend(utc);
 dayjs.locale('id');
 
 export type Slot = {
   id_slot: string;
   id_jadwal: string;
   id_dokter: string;
-  tanggal: string;
-  jam_mulai: string;
-  jam_selesai: string;
+  tanggal: string; // ISO UTC 00:00 dari server
+  jam_mulai: string; // ISO anchor UTC (1970-01-01THH:mm:ssZ) dari server
+  jam_selesai: string; // ISO anchor UTC (1970-01-01THH:mm:ssZ) dari server
   kapasitas: number;
-  terisi: number; // penting
+  terisi: number;
   sisa?: number;
   is_active: boolean;
 };
+
+/** Format helper agar konsisten UTC */
+function fmtDateUTC(v?: string) {
+  return v ? dayjs.utc(v).format('DD MMM YYYY') : '-';
+}
+function fmtTimeUTC(v?: string) {
+  return v ? dayjs.utc(v).format('HH:mm') : '-';
+}
 
 export default function SlotPraktikTable({
   aktif,
@@ -33,11 +43,22 @@ export default function SlotPraktikTable({
   loading: boolean;
   onToggle: (row: Slot, next: boolean) => void;
   onDelete: (id: string) => void;
-  onEdit: (row: Slot) => void; // NEW
+  onEdit: (row: Slot) => void;
 }) {
   const baseCols: any[] = [
-    { title: 'Tanggal', dataIndex: 'tanggal', key: 'tanggal', width: 140, render: (v: string) => dayjs(v).format('DD MMM YYYY') },
-    { title: 'Jam', key: 'jam', width: 200, render: (_: any, r: Slot) => `${dayjs(r.jam_mulai).format('HH:mm')} - ${dayjs(r.jam_selesai).format('HH:mm')}` },
+    {
+      title: 'Tanggal',
+      dataIndex: 'tanggal',
+      key: 'tanggal',
+      width: 140,
+      render: (v: string) => fmtDateUTC(v),
+    },
+    {
+      title: 'Jam',
+      key: 'jam',
+      width: 200,
+      render: (_: any, r: Slot) => `${fmtTimeUTC(r.jam_mulai)} - ${fmtTimeUTC(r.jam_selesai)}`,
+    },
     {
       title: 'Kuota',
       key: 'kuota',
@@ -93,7 +114,12 @@ export default function SlotPraktikTable({
 
   const colsNonaktif: any[] = [
     ...baseCols,
-    { title: 'Status', key: 'status', width: 120, render: () => <Tag color='volcano'>Nonaktif</Tag> },
+    {
+      title: 'Status',
+      key: 'status',
+      width: 120,
+      render: () => <Tag color='volcano'>Nonaktif</Tag>,
+    },
     {
       title: 'Aksi',
       key: 'aksi',
@@ -119,8 +145,6 @@ export default function SlotPraktikTable({
     },
   ];
 
-  // …render 2 table (aktif & nonaktif) sama seperti sebelumnya
-  // (biarkan kode render-mu yang lama; fokus perubahan ada di columns di atas)
   return (
     <Space
       direction='vertical'

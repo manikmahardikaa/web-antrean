@@ -18,13 +18,14 @@ export const ApiEndpoints = {
   DeleteTanggungan: (id: string) => `/api/tanggungan/${id}`,
 
   // Dokter
-  GetDokter: '/api/dokter',
+  GetDokter: '/api/dokter', // pakai query ?onlyActive=true bila perlu
   CreateDokter: '/api/dokter',
   GetDokterById: (id: string) => `/api/dokter/${id}`,
   UpdateDokter: (id: string) => `/api/dokter/${id}`,
   DeleteDokter: (id: string) => `/api/dokter/${id}`,
   NonaktifDokter: (id: string) => `/api/dokter/${id}/nonaktif`,
   AktifkanDokter: (id: string) => `/api/dokter/${id}/aktifkan`,
+  UploadFotoDokter: (id: string) => `/api/dokter/${id}/upload-foto`,
 
   // Jadwal Praktik
   GetJadwalPraktik: '/api/jadwal-praktik',
@@ -39,9 +40,22 @@ export const ApiEndpoints = {
   DeleteSlotPraktik: (id: string) => `/api/slot-praktik/${id}`,
   GetRiwayatDokter: (id: string) => `/api/dokter/${id}/riwayat`,
 
-  // antrean
+  // Antrean
   GetAntrean: '/api/antrean',
   BulkStatusAntrean: '/api/antrean/bulk-status',
   UpdateStatusAntrean: (id: string) => `/api/antrean/${id}/status`,
   ReassignDokterAntrean: (id: string) => `/api/antrean/${id}/reassign-dokter`,
+
+  // Users (CRUD)
+  GetUsers: '/api/users', // ADMIN; dukung query ?q=&role=&jk=&layanan=&tanggungan=
+  CreateUser: '/api/users', // ADMIN
+  GetUserById: (id: string) => `/api/users/${id}`,
+  UpdateUser: (id: string) => `/api/users/${id}`,
+  DeleteUser: (id: string) => `/api/users/${id}`,
+
+  //berita-kesehatan
+  GetBerita: '/api/berita-kesehatan',
+  getBeritabyId: (id: string) => `/api/berita-kesehatan/${id}`,
+  UpdateBerita: (id: string) => `/api/berita-kesehatan/${id}`,
+  DeleteBerita: (id: string) => `/api/berita-kesehatan/${id}`,
 } as const;

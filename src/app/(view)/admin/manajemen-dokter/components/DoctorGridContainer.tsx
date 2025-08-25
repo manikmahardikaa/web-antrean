@@ -66,16 +66,33 @@ export default function DokterGridContainer() {
     setDrawerOpen(false);
   };
 
-  const submit = async (values: { nama_dokter: string; spesialisasi: string }) => {
+  // components/Dokter/DoctorGridContainer.tsx
+
+  const submit = async (values: { nama_dokter: string; spesialisasi: string }, file?: File | null) => {
     try {
       setLoading(true);
-      const res = editing ? await apiAuth.putDataPrivate(ApiEndpoints.UpdateDokter(editing.id_dokter), values) : await apiAuth.postDataPrivate(ApiEndpoints.CreateDokter, values);
-      if (res?.message && res?.ok !== true && !res?.id_dokter) throw new Error(res.message);
+
+      // siapkan FormData untuk JSON + (opsional) file
+      const fd = new FormData();
+      fd.append('nama_dokter', values.nama_dokter.trim());
+      fd.append('spesialisasi', values.spesialisasi.trim());
+      if (file) fd.append('file', file); // server sudah validasi 2MB & mime
+
+      // create vs update
+      let res;
+      if (editing) {
+        res = await apiAuth.putDataPrivateWithFile(ApiEndpoints.UpdateDokter(editing.id_dokter), fd);
+      } else {
+        res = await apiAuth.postDataPrivateWithFile(ApiEndpoints.CreateDokter, fd);
+      }
+
+      if (res?.ok === false) throw new Error(res?.message || 'Gagal menyimpan data dokter');
+
       message.success(editing ? 'Dokter diperbarui' : 'Dokter ditambahkan');
       await load();
       closeDrawer();
     } catch (e: any) {
-      message.error(e?.message || 'Gagal menyimpan data');
+      message.error(e?.message || 'Gagal menyimpan');
     } finally {
       setLoading(false);
     }
