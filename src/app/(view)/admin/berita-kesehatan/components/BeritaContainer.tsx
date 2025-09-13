@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import { message } from 'antd';
+import { Card, Space, Button, Table, Tag, Image, Popconfirm, message } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import { apiAuth } from '@/utils/apiAuth';
 import { ApiEndpoints } from '@/constraints/api-endpoints';
-import { NewsFormValues } from './NewsFormDrawer'; // Import NewsFormValues
+import NewsFormDrawer, { NewsFormValues } from './NewsFormDrawer';
 
 export type Berita = {
   id_berita: string;
@@ -30,48 +31,22 @@ export type Filters = {
 type Props = {
   filters: Filters;
   refreshToken: number;
-  onEditNews: (news: Berita) => void;
-  onDataLoaded: (data: Berita[], total: number, page: number, pageSize: number) => void; // Callback to pass data to parent
-  onLoadingChange: (loading: boolean) => void; // Callback to pass loading state to parent
-  onPageChange: (page: number, pageSize: number) => void; // Callback for pagination changes
-  currentPage: number; // Current page from parent
-  currentPageSize: number; // Current page size from parent
-  onSubmitNews: (values: NewsFormValues, file?: File | null, editing?: Berita | null) => Promise<void>; // New prop for submit
-  onDeleteNews: (id: string) => Promise<void>; // New prop for delete
 };
 
-export default function BeritaContainer({
-  filters,
-  refreshToken,
-  onEditNews,
-  onDataLoaded,
-  onLoadingChange,
-  onPageChange,
-  currentPage,
-  currentPageSize,
-  onSubmitNews,
-  onDeleteNews,
-}: Props) {
+export default function BeritaContainer({ filters, refreshToken }: Props) {
   const [loading, setLoading] = React.useState(false);
   const [rows, setRows] = React.useState<Berita[]>([]);
-  const [page, setPage] = React.useState(currentPage); // Use currentPage from props
-  const [pageSize, setPageSize] = React.useState(currentPageSize); // Use currentPageSize from props
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
   const [total, setTotal] = React.useState(0);
 
-  // Update internal page/pageSize when props change
-  React.useEffect(() => {
-    setPage(currentPage);
-  }, [currentPage]);
-
-  React.useEffect(() => {
-    setPageSize(currentPageSize);
-  }, [currentPageSize]);
-
+  const [open, setOpen] = React.useState(false);
+  const [drawerLoading, setDrawerLoading] = React.useState(false);
+  const [editing, setEditing] = React.useState<Berita | null>(null);
 
   const load = React.useCallback(async () => {
     try {
       setLoading(true);
-      onLoadingChange(true); // Notify parent about loading state
 
       const params = new URLSearchParams();
       if (filters.q.trim()) params.set('q', filters.q.trim());
@@ -91,37 +66,21 @@ export default function BeritaContainer({
       if (json) {
         setRows(json.data);
         setTotal(json.meta.total);
-        onDataLoaded(json.data, json.meta.total, page, pageSize); // Pass data to parent
       }
     } catch (e: any) {
       message.error(e?.message || 'Gagal memuat data');
     } finally {
       setLoading(false);
-      onLoadingChange(false); // Notify parent about loading state
     }
-  }, [filters, page, pageSize, onDataLoaded, onLoadingChange]);
+  }, [filters, page, pageSize]);
 
   React.useEffect(() => {
     void load();
   }, [load, refreshToken]);
 
-  const handleDelete = async (id: string) => {
+  const handleSubmit = async (values: NewsFormValues, file?: File | null) => {
     try {
-      setLoading(true);
-      await apiAuth.deleteDataPrivate(ApiEndpoints.DeleteBerita(id));
-      message.success('Berita dihapus');
-      if (rows.length === 1 && page > 1) onPageChange(page - 1, pageSize);
-      else await load();
-    } catch (e: any) {
-      message.error(e?.message || 'Gagal menghapus data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (values: NewsFormValues, file?: File | null, editing?: Berita | null) => {
-    try {
-      setLoading(true);
+      setDrawerLoading(true);
 
       const isEdit = !!editing?.id_berita;
       const url = isEdit ? ApiEndpoints.UpdateBerita(editing!.id_berita) : ApiEndpoints.CreateBerita;
@@ -139,13 +98,165 @@ export default function BeritaContainer({
       }
 
       message.success(isEdit ? 'Berita diperbarui' : 'Berita ditambahkan');
+      setOpen(false);
+      setEditing(null);
       await load();
     } catch (e: any) {
       message.error(e?.message || 'Gagal menyimpan');
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      setLoading(true);
+      await apiAuth.deleteDataPrivate(ApiEndpoints.DeleteBerita(id));
+      message.success('Berita dihapus');
+      if (rows.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        await load();
+      }
+    } catch (e: any) {
+      message.error(e?.message || 'Gagal menghapus data');
     } finally {
       setLoading(false);
     }
   };
 
-  return null;
+  const columns = [
+    {
+      title: 'Tanggal',
+      dataIndex: 'tanggal_penerbitan',
+      key: 'tanggal',
+      width: 150,
+      render: (v: string) => dayjs(v).format('DD MMM YYYY'),
+      sorter: (a: Berita, b: Berita) => dayjs(a.tanggal_penerbitan).valueOf() - dayjs(b.tanggal_penerbitan).valueOf(),
+    },
+    {
+      title: 'Judul',
+      dataIndex: 'judul',
+      key: 'judul',
+      render: (text: string) => <strong>{text}</strong>,
+    },
+    {
+      title: 'Deskripsi',
+      dataIndex: 'deskripsi',
+      key: 'deskripsi',
+      ellipsis: true,
+      render: (html: string) => <div dangerouslySetInnerHTML={{ __html: html }} />,
+    },
+    {
+      title: 'Gambar',
+      dataIndex: 'foto_url',
+      key: 'foto',
+      width: 120,
+      render: (url: string | null) =>
+        url ? (
+          <Image
+            width={80}
+            src={url}
+            alt='news'
+          />
+        ) : (
+          <Tag color='default'>Tidak ada</Tag>
+        ),
+    },
+    {
+      title: 'Dibuat',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 170,
+      render: (v: string) => dayjs(v).format('DD MMM YYYY HH:mm'),
+    },
+    {
+      title: 'Aksi',
+      key: 'aksi',
+      width: 200,
+      render: (_: any, row: Berita) => (
+        <Space>
+          <Button
+            icon={<EditOutlined />}
+            onClick={() => {
+              setEditing(row);
+              setOpen(true);
+            }}
+          >
+            Edit
+          </Button>
+          <Popconfirm
+            title='Hapus berita ini?'
+            okText='Hapus'
+            okButtonProps={{ danger: true }}
+            onConfirm={() => handleDelete(row.id_berita)}
+          >
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+            >
+              Hapus
+            </Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          type='primary'
+          icon={<PlusOutlined />}
+          onClick={() => {
+            setEditing(null);
+            setOpen(true);
+          }}
+        >
+          Tambah Berita
+        </Button>
+      </div>
+
+      <Card style={{ marginTop: 8 }}>
+        <Table<Berita>
+          rowKey='id_berita'
+          loading={loading}
+          columns={columns as any}
+          dataSource={rows}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            onChange: (p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            },
+          }}
+          scroll={{ x: 900 }}
+        />
+      </Card>
+
+      <NewsFormDrawer
+        open={open}
+        loading={drawerLoading}
+        initial={
+          editing
+            ? {
+                judul: editing.judul,
+                deskripsi: editing.deskripsi,
+                tanggal_penerbitan: dayjs(editing.tanggal_penerbitan),
+                foto_url: editing.foto_url || null,
+              }
+            : null
+        }
+        onClose={() => {
+          setOpen(false);
+          setEditing(null);
+        }}
+        onSubmit={(values, file) => handleSubmit(values, file)}
+      />
+    </>
+  );
 }

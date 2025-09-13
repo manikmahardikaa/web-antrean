@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { Card, Table, Tag, Popconfirm, message, Button, Space, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, LinkOutlined } from '@ant-design/icons';
+import { Card, Table, Tag, Popconfirm, message, Button, Space, Tooltip, Input, DatePicker, Typography, Flex } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import { EditOutlined, DeleteOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import VideoFormDrawer, { VideoFormValues } from './VideoFormDrawer';
 import { apiAuth } from '@/utils/apiAuth';
@@ -28,17 +29,14 @@ export type Filters = {
   range: [Dayjs, Dayjs] | null;
 };
 
-type Props = {
-  filters: Filters;
-  refreshToken: number;
-};
-
-export default function VideoContainer({ filters, refreshToken }: Props) {
+export default function VideoContainer() {
   const [loading, setLoading] = React.useState(false);
   const [rows, setRows] = React.useState<Video[]>([]);
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
   const [total, setTotal] = React.useState(0);
+
+  const [filters, setFilters] = React.useState<Filters>({ q: '', range: null });
 
   // Drawer
   const [open, setOpen] = React.useState(false);
@@ -75,7 +73,21 @@ export default function VideoContainer({ filters, refreshToken }: Props) {
 
   React.useEffect(() => {
     void load();
-  }, [load, refreshToken]);
+  }, [load]);
+
+  const handleFilterChange = (changed: Partial<Filters>) => {
+    setFilters((prev) => ({ ...prev, ...changed }));
+  };
+
+  const resetFilter = () => {
+    setFilters({ q: '', range: null });
+    setPage(1);
+  };
+
+  const onAdd = () => {
+    setEditing(null);
+    setOpen(true);
+  };
 
   const onEdit = (row: Video) => {
     setEditing(row);
@@ -126,7 +138,7 @@ export default function VideoContainer({ filters, refreshToken }: Props) {
     }
   };
 
-  const columns = [
+  const columns: ColumnsType<Video> = [
     {
       title: 'Tanggal',
       dataIndex: 'tanggal_penerbitan',
@@ -154,7 +166,7 @@ export default function VideoContainer({ filters, refreshToken }: Props) {
               target='_blank'
               rel='noopener noreferrer'
             >
-              <LinkOutlined /> Link
+              <LinkOutlined />
             </a>
           </Tooltip>
         ) : (
@@ -162,17 +174,11 @@ export default function VideoContainer({ filters, refreshToken }: Props) {
         ),
     },
     {
-      title: 'Dibuat',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 170,
-      render: (v: string) => dayjs(v).format('DD MMM YYYY HH:mm'),
-    },
-    {
       title: 'Aksi',
       key: 'aksi',
-      width: 200,
-      render: (_: any, row: Video) => (
+      width: 180,
+      fixed: 'right',
+      render: (_, row) => (
         <Space>
           <Button
             icon={<EditOutlined />}
@@ -198,13 +204,65 @@ export default function VideoContainer({ filters, refreshToken }: Props) {
     },
   ];
 
+  const { RangePicker } = DatePicker;
+
   return (
-    <>
+    <Space
+      direction='vertical'
+      size={16}
+      style={{ width: '100%' }}
+    >
+      <Card>
+        <Flex
+          wrap='wrap'
+          gap={12}
+          align='center'
+          justify='space-between'
+        >
+          <Typography.Title
+            level={4}
+            style={{ margin: 0 }}
+          >
+            Manajemen Video Kesehatan
+          </Typography.Title>
+          <Space wrap>
+            <Input
+              allowClear
+              placeholder='Cari judul/deskripsi…'
+              prefix={<SearchOutlined />}
+              value={filters.q}
+              onChange={(e) => handleFilterChange({ q: e.target.value })}
+              style={{ width: 260 }}
+            />
+            <RangePicker
+              value={filters.range}
+              onChange={(v) => handleFilterChange({ range: v as [Dayjs, Dayjs] | null })}
+              style={{ width: 280 }}
+              allowClear
+            />
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => load()}
+            >
+              Refresh
+            </Button>
+            <Button onClick={resetFilter}>Reset</Button>
+            <Button
+              type='primary'
+              icon={<PlusOutlined />}
+              onClick={onAdd}
+            >
+              Tambah Video
+            </Button>
+          </Space>
+        </Flex>
+      </Card>
+
       <Card>
         <Table<Video>
           rowKey='id_video'
           loading={loading}
-          columns={columns as any}
+          columns={columns}
           dataSource={rows}
           pagination={{
             current: page,
@@ -239,6 +297,6 @@ export default function VideoContainer({ filters, refreshToken }: Props) {
         }}
         onSubmit={handleSubmit}
       />
-    </>
+    </Space>
   );
 }
