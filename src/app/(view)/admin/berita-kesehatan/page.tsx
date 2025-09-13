@@ -1,143 +1,109 @@
 'use client';
 
 import React from 'react';
-import { Card, Space, Button, Table, Tag, Image, Input, DatePicker, Popconfirm, message, Typography, Flex } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { Card, Space, Button, Input, DatePicker, Typography, Flex, Table, Tag, Image, Popconfirm, message } from 'antd';
+import { PlusOutlined, ReloadOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
+import BeritaContainer, { Filters, Berita } from './components/BeritaContainer';
 import NewsFormDrawer, { NewsFormValues } from './components/NewsFormDrawer';
-
-type Berita = {
-  id_berita: string;
-  judul: string;
-  deskripsi: string;
-  tanggal_penerbitan: string; // ISO date from API
-  foto_url: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type ListResp = {
-  data: Berita[];
-  meta: { page: number; pageSize: number; total: number; pages: number };
-};
+import { apiAuth } from '@/utils/apiAuth';
+import { ApiEndpoints } from '@/constraints/api-endpoints';
 
 const { RangePicker } = DatePicker;
 
 export default function AdminBeritaPage() {
-  const [loading, setLoading] = React.useState(false);
+  const [filters, setFilters] = React.useState<Filters>({ q: '', range: null });
+  const [refreshToken, setRefreshToken] = React.useState(0);
+
+  const [open, setOpen] = React.useState(false);
+  const [drawerLoading, setDrawerLoading] = React.useState(false);
+  const [editing, setEditing] = React.useState<Berita | null>(null);
+
   const [rows, setRows] = React.useState<Berita[]>([]);
+  const [tableLoading, setTableLoading] = React.useState(false);
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
   const [total, setTotal] = React.useState(0);
 
-  const [q, setQ] = React.useState('');
-  const [range, setRange] = React.useState<[Dayjs | null, Dayjs | null] | null>(null);
-
-  // Drawer
-  const [open, setOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState<Berita | null>(null);
-
-  const load = React.useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (q.trim()) params.set('q', q.trim());
-      if (range?.[0]) params.set('from', range[0]!.format('YYYY-MM-DD'));
-      if (range?.[1]) params.set('to', range[1]!.format('YYYY-MM-DD'));
-      params.set('page', String(page));
-      params.set('pageSize', String(pageSize));
-      params.set('sort', 'recent');
-
-      const res = await fetch(`/api/berita?${params.toString()}`, { cache: 'no-store' });
-      if (!res.ok) throw new Error((await res.json()).message || 'Gagal memuat berita');
-      const json: ListResp = await res.json();
-      setRows(json.data);
-      setTotal(json.meta.total);
-    } catch (e: any) {
-      message.error(e?.message || 'Gagal memuat data');
-    } finally {
-      setLoading(false);
-    }
-  }, [q, range, page, pageSize]);
-
-  React.useEffect(() => {
-    void load();
-  }, [load]);
-
   const resetFilter = () => {
-    setQ('');
-    setRange(null);
-    setPage(1);
-    setPageSize(10);
+    setFilters({ q: '', range: null });
+    setRefreshToken((t) => t + 1);
   };
 
-  const onCreate = () => {
-    setEditing(null);
+  const handleFilterChange = (changed: Partial<Filters>) => {
+    setFilters((prev) => ({ ...prev, ...changed }));
+  };
+
+  const handleEditNews = (news: Berita) => {
+    setEditing(news);
     setOpen(true);
   };
 
-  const onEdit = (row: Berita) => {
-    setEditing(row);
-    setOpen(true);
-  };
+  const handleDataLoaded = React.useCallback((data: Berita[], totalCount: number, currentPage: number, currentPageSize: number) => {
+    setRows(data);
+    setTotal(totalCount);
+    setPage(currentPage);
+    setPageSize(currentPageSize);
+  }, []);
 
-  const onDelete = async (id: string) => {
+  const handleLoadingChange = React.useCallback((loading: boolean) => {
+    setTableLoading(loading);
+  }, []);
+
+  // Create / Update
+  const handleSubmitNews = async (
+    values: NewsFormValues, // { judul: string, deskripsi: HTML string, tanggal_penerbitan: Dayjs }
+    file?: File | null,
+    editingNews?: Berita | null
+  ) => {
     try {
-      setLoading(true);
-      const res = await fetch(`/api/berita/${id}`, { method: 'DELETE' });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j?.message || 'Gagal menghapus');
-      message.success('Berita dihapus');
-      // jika page jadi kosong setelah delete, mundurkan halaman
-      if (rows.length === 1 && page > 1) setPage((p) => p - 1);
-      await load();
-    } catch (e: any) {
-      message.error(e?.message || 'Gagal menghapus data');
-    } finally {
-      setLoading(false);
-    }
-  };
+      setDrawerLoading(true);
 
-  const handleSubmit = async (values: NewsFormValues, file?: File | null) => {
-    try {
-      setLoading(true);
+      const isEdit = !!editingNews?.id_berita;
+      const url = isEdit ? ApiEndpoints.UpdateBerita(editingNews!.id_berita) : ApiEndpoints.CreateBerita;
 
-      const isEdit = !!editing?.id_berita;
-      const url = isEdit ? `/api/berita/${editing!.id_berita}` : '/api/berita';
-      const method = isEdit ? 'PUT' : 'POST';
+      const fd = new FormData();
+      fd.append('judul', values.judul);
+      fd.append('deskripsi', values.deskripsi); // WYSIWYG HTML
+      fd.append('tanggal_penerbitan', dayjs(values.tanggal_penerbitan).format('YYYY-MM-DD'));
+      if (file) fd.append('file', file);
 
-      if (file) {
-        const fd = new FormData();
-        fd.append('judul', values.judul);
-        fd.append('deskripsi', values.deskripsi);
-        fd.append('tanggal_penerbitan', dayjs(values.tanggal_penerbitan).format('YYYY-MM-DD'));
-        fd.append('file', file);
-        const res = await fetch(url, { method, body: fd });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(j?.message || 'Gagal menyimpan data');
+      if (isEdit) {
+        await apiAuth.putDataPrivateWithFile(url, fd);
       } else {
-        const res = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            judul: values.judul,
-            deskripsi: values.deskripsi,
-            tanggal_penerbitan: dayjs(values.tanggal_penerbitan).format('YYYY-MM-DD'),
-            // foto_url: undefined -> server tidak mengubah jika tidak dikirim
-          }),
-        });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(j?.message || 'Gagal menyimpan data');
+        await apiAuth.postDataPrivateWithFile(url, fd);
       }
 
       message.success(isEdit ? 'Berita diperbarui' : 'Berita ditambahkan');
       setOpen(false);
       setEditing(null);
-      await load();
+
+      // refresh data (tetap di halaman aktif)
+      setRefreshToken((t) => t + 1);
     } catch (e: any) {
       message.error(e?.message || 'Gagal menyimpan');
     } finally {
-      setLoading(false);
+      setDrawerLoading(false);
+    }
+  };
+
+  // Delete
+  const handleDeleteNews = async (id: string) => {
+    try {
+      setTableLoading(true);
+      await apiAuth.deleteDataPrivate(ApiEndpoints.DeleteBerita(id));
+      message.success('Berita dihapus');
+
+      // jika item terakhir di halaman & bukan halaman pertama → mundur 1 halaman
+      if (rows.length === 1 && page > 1) {
+        setPage(page - 1);
+      }
+
+      setRefreshToken((t) => t + 1);
+    } catch (e: any) {
+      message.error(e?.message || 'Gagal menghapus data');
+    } finally {
+      setTableLoading(false);
     }
   };
 
@@ -187,7 +153,7 @@ export default function AdminBeritaPage() {
         <Space>
           <Button
             icon={<EditOutlined />}
-            onClick={() => onEdit(row)}
+            onClick={() => handleEditNews(row)}
           >
             Edit
           </Button>
@@ -195,7 +161,7 @@ export default function AdminBeritaPage() {
             title='Hapus berita ini?'
             okText='Hapus'
             okButtonProps={{ danger: true }}
-            onConfirm={() => onDelete(row.id_berita)}
+            onConfirm={() => handleDeleteNews(row.id_berita)}
           >
             <Button
               danger
@@ -233,26 +199,20 @@ export default function AdminBeritaPage() {
               allowClear
               placeholder='Cari judul/deskripsi…'
               prefix={<SearchOutlined />}
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onPressEnter={() => {
-                setPage(1);
-                void load();
-              }}
+              value={filters.q}
+              onChange={(e) => handleFilterChange({ q: e.target.value })}
+              onPressEnter={() => setRefreshToken((t) => t + 1)}
               style={{ width: 260 }}
             />
             <RangePicker
-              value={range ?? null}
-              onChange={(v) => setRange(v as any)}
+              value={filters.range}
+              onChange={(v) => handleFilterChange({ range: v as [Dayjs, Dayjs] | null })}
               style={{ width: 280 }}
               allowClear
             />
             <Button
               icon={<ReloadOutlined />}
-              onClick={() => {
-                setPage(1);
-                void load();
-              }}
+              onClick={() => setRefreshToken((t) => t + 1)}
             >
               Refresh
             </Button>
@@ -260,7 +220,10 @@ export default function AdminBeritaPage() {
             <Button
               type='primary'
               icon={<PlusOutlined />}
-              onClick={onCreate}
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
             >
               Tambah Berita
             </Button>
@@ -268,10 +231,28 @@ export default function AdminBeritaPage() {
         </Flex>
       </Card>
 
+      {/* Loader & sinkronisasi tabel */}
+      <BeritaContainer
+        filters={filters}
+        refreshToken={refreshToken}
+        onEditNews={handleEditNews}
+        onDataLoaded={handleDataLoaded}
+        onLoadingChange={handleLoadingChange}
+        onPageChange={(p, ps) => {
+          setPage(p);
+          setPageSize(ps);
+        }}
+        currentPage={page}
+        currentPageSize={pageSize}
+        // dikirim untuk konsistensi API; container fokus fetch
+        onSubmitNews={handleSubmitNews}
+        onDeleteNews={handleDeleteNews}
+      />
+
       <Card>
         <Table<Berita>
           rowKey='id_berita'
-          loading={loading}
+          loading={tableLoading}
           columns={columns as any}
           dataSource={rows}
           pagination={{
@@ -290,12 +271,12 @@ export default function AdminBeritaPage() {
 
       <NewsFormDrawer
         open={open}
-        loading={loading}
+        loading={drawerLoading}
         initial={
           editing
             ? {
                 judul: editing.judul,
-                deskripsi: editing.deskripsi,
+                deskripsi: editing.deskripsi, // HTML string untuk WYSIWYG
                 tanggal_penerbitan: dayjs(editing.tanggal_penerbitan),
                 foto_url: editing.foto_url || null,
               }
@@ -305,7 +286,7 @@ export default function AdminBeritaPage() {
           setOpen(false);
           setEditing(null);
         }}
-        onSubmit={handleSubmit}
+        onSubmit={(values, file) => handleSubmitNews(values, file, editing)}
       />
     </Space>
   );

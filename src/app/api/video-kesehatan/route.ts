@@ -17,10 +17,10 @@ function parseDateOnlyUTC(v: any): Date | null {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
-const BUCKET = 'image_news';
+const BUCKET = 'video_news';
 
 /**
- * GET /api/berita
+ * GET /api/video-kesehatan
  * Query:
  *  - q: string (cari di judul/deskripsi)
  *  - from=YYYY-MM-DD
@@ -58,13 +58,13 @@ export async function GET(req: Request) {
     const orderBy = sort === 'oldest' ? [{ tanggal_penerbitan: 'asc' as const }, { createdAt: 'asc' as const }] : [{ tanggal_penerbitan: 'desc' as const }, { createdAt: 'desc' as const }];
 
     const [rows, total] = await Promise.all([
-      prisma.beritaKesehatan.findMany({
+      prisma.videoKesehatan.findMany({
         where,
         orderBy,
         skip,
         take: pageSize,
       }),
-      prisma.beritaKesehatan.count({ where }),
+      prisma.videoKesehatan.count({ where }),
     ]);
 
     return NextResponse.json({
@@ -77,10 +77,10 @@ export async function GET(req: Request) {
 }
 
 /**
- * POST /api/berita  (ADMIN)
+ * POST /api/video-kesehatan  (ADMIN)
  * Mendukung:
- *  - JSON: { judul, deskripsi, tanggal_penerbitan (YYYY-MM-DD), foto_url? }
- *  - multipart/form-data: fields judul, deskripsi, tanggal_penerbitan, file (image)
+ *  - JSON: { judul, deskripsi, tanggal_penerbitan (YYYY-MM-DD), video_url? }
+ *  - multipart/form-data: fields judul, deskripsi, tanggal_penerbitan, file (video)
  */
 export const POST = withRole('ADMIN')(async (req: Request) => {
   try {
@@ -98,17 +98,17 @@ export const POST = withRole('ADMIN')(async (req: Request) => {
       if (!deskripsi) return NextResponse.json({ message: 'deskripsi wajib' }, { status: 400 });
       if (!tgl) return NextResponse.json({ message: 'tanggal_penerbitan wajib (YYYY-MM-DD)' }, { status: 400 });
 
-      // Buat row dulu (tanpa foto)
-      const created = await prisma.beritaKesehatan.create({
-        data: { judul, deskripsi, tanggal_penerbitan: tgl, foto_url: '' },
+      // Buat row dulu (tanpa video)
+      const created = await prisma.videoKesehatan.create({
+        data: { judul, deskripsi, tanggal_penerbitan: tgl, video_url: '' },
       });
 
       if (file && file.size > 0) {
-        if (!file.type.startsWith('image/')) return NextResponse.json({ message: 'Hanya file gambar yang diizinkan' }, { status: 400 });
-        if (file.size > 2 * 1024 * 1024) return NextResponse.json({ message: 'Ukuran file maksimal 2MB' }, { status: 400 });
+        if (!file.type.startsWith('video/')) return NextResponse.json({ message: 'Hanya file video yang diizinkan' }, { status: 400 });
+        if (file.size > 50 * 1024 * 1024) return NextResponse.json({ message: 'Ukuran file maksimal 50MB' }, { status: 400 });
 
-        const ext = (file.type.split('/')[1] || 'jpg' || 'png' || 'jpeg').replace(/[^a-z0-9]/gi, '').toLowerCase();
-        const path = `${created.id_berita}/image_${Date.now()}.${ext}`;
+        const ext = (file.type.split('/')[1] || 'mp4').replace(/[^a-z0-9]/gi, '').toLowerCase();
+        const path = `${created.id_video}/video_${Date.now()}.${ext}`;
 
         const ab = await file.arrayBuffer();
         const { error } = await supabaseAdmin.storage.from(BUCKET).upload(path, new Uint8Array(ab), {
@@ -120,9 +120,9 @@ export const POST = withRole('ADMIN')(async (req: Request) => {
         }
         const { data: pub } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
 
-        const updated = await prisma.beritaKesehatan.update({
-          where: { id_berita: created.id_berita },
-          data: { foto_url: pub.publicUrl },
+        const updated = await prisma.videoKesehatan.update({
+          where: { id_video: created.id_video },
+          data: { video_url: pub.publicUrl },
         });
         return NextResponse.json(updated, { status: 201 });
       }
@@ -135,14 +135,14 @@ export const POST = withRole('ADMIN')(async (req: Request) => {
     const judul = String(body?.judul || '').trim();
     const deskripsi = String(body?.deskripsi || '').trim();
     const tgl = parseDateOnlyUTC(body?.tanggal_penerbitan);
-    const foto_url = body?.foto_url ? String(body.foto_url) : null;
+    const video_url = body?.video_url ? String(body.video_url) : null;
 
     if (!judul) return NextResponse.json({ message: 'judul wajib' }, { status: 400 });
     if (!deskripsi) return NextResponse.json({ message: 'deskripsi wajib' }, { status: 400 });
     if (!tgl) return NextResponse.json({ message: 'tanggal_penerbitan wajib (YYYY-MM-DD)' }, { status: 400 });
 
-    const created = await prisma.beritaKesehatan.create({
-      data: { judul, deskripsi, tanggal_penerbitan: tgl, foto_url: foto_url || '' },
+    const created = await prisma.videoKesehatan.create({
+      data: { judul, deskripsi, tanggal_penerbitan: tgl, video_url: video_url || '' },
     });
     return NextResponse.json(created, { status: 201 });
   } catch (e: any) {

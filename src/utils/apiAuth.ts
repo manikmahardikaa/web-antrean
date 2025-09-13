@@ -119,7 +119,7 @@ export const apiAuth = {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
-        // PENTING: JANGAN set 'Content-Type' untuk FormData
+ 
         Authorization: `Bearer ${token}`,
       },
       body: formData,
@@ -150,7 +150,7 @@ export const apiAuth = {
     const res = await fetch(url, {
       method: 'PUT',
       headers: {
-        // JANGAN set 'Content-Type' untuk FormData
+       
         Authorization: `Bearer ${token}`,
       },
       body: formData,

@@ -33,6 +33,7 @@ export async function POST(req: Request) {
       email: user.email,
       role: user.role,
     });
+    const expiresIn = 60 * 60 * 24; // 24 jam dalam detik
 
     // Jangan kirim password ke client
     const { password: _pw, ...safeUser } = user;
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
       {
         message: 'Login berhasil',
         token,
+        expiresIn,
         // user: safeUser,
       },
       { status: 200 }

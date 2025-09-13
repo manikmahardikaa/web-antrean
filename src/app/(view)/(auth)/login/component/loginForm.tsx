@@ -22,7 +22,7 @@ export default function LoginForm(props: Props) {
     setLoading(true);
     try {
       const response = await apiAuth.post('/api/auth/login', values);
-      console.log('✅ Response dari login:', response); // DEBUG
+      // console.log('✅ Response dari login:', response); // DEBUG
 
       if (!response?.token) {
         api.error({
@@ -33,6 +33,7 @@ export default function LoginForm(props: Props) {
       }
 
       await auth?.login(response.token, response.expiresIn || 3600);
+      await auth?.login(response.token, response.expiresIn || 60 * 60 * 24);
 
       api.success({
         message: 'Login Berhasil',

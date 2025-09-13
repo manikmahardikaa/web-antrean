@@ -53,9 +53,18 @@ export const ApiEndpoints = {
   UpdateUser: (id: string) => `/api/users/${id}`,
   DeleteUser: (id: string) => `/api/users/${id}`,
 
-  //berita-kesehatan
+  // Berita Kesehatan
   GetBerita: '/api/berita-kesehatan',
-  getBeritabyId: (id: string) => `/api/berita-kesehatan/${id}`,
+  CreateBerita: '/api/berita-kesehatan',
+  GetBeritaById: (id: string) => `/api/berita-kesehatan/${id}`,
   UpdateBerita: (id: string) => `/api/berita-kesehatan/${id}`,
   DeleteBerita: (id: string) => `/api/berita-kesehatan/${id}`,
+
+  // Video Kesehatan
+  GetVideo: '/api/video-kesehatan',
+  CreateVideo: '/api/video-kesehatan',
+  GetVideoById: (id: string) => `/api/video-kesehatan/${id}`,
+  UpdateVideo: (id: string) => `/api/video-kesehatan/${id}`,
+  DeleteVideo: (id: string) => `/api/video-kesehatan/${id}`,
 } as const;
+

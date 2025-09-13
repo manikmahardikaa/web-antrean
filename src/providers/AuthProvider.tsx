@@ -88,7 +88,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const login = async (token: string, expiresIn: number = 3600) => {
+  const login = async (token: string, expiresIn: number = 60 * 60 * 24) => {
     setToken(token);
     await jwtStorage.storeToken(token, expiresIn);
     setIsLoading(true);

@@ -1,16 +1,21 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { Drawer, Form, Input, DatePicker, Upload, Space, Button, Image, message } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
+import 'react-quill/dist/quill.snow.css'; // style editor
 
-const { TextArea } = Input;
 const { Dragger } = Upload;
+const { TextArea } = Input;
+
+// Lazy-load ReactQuill (hindari SSR issues)
+const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
 export type NewsFormValues = {
   judul: string;
-  deskripsi: string;
+  deskripsi: string; // html string dari quill
   tanggal_penerbitan: Dayjs;
 };
 
@@ -29,17 +34,39 @@ export default function NewsFormDrawer({
 }) {
   const [form] = Form.useForm<NewsFormValues>();
   const [file, setFile] = React.useState<File | null>(null);
+  const [previewSrc, setPreviewSrc] = React.useState<string | null>(null);
+
+  // Quill toolbar
+  const quillModules = React.useMemo(
+    () => ({
+      toolbar: [[{ header: [1, 2, 3, false] }], ['bold', 'italic', 'underline', 'strike'], [{ list: 'ordered' }, { list: 'bullet' }], [{ align: [] }], ['link', 'blockquote', 'code-block'], ['clean']],
+    }),
+    []
+  );
+
+  React.useEffect(() => {
+    if (!file) {
+      if (previewSrc) URL.revokeObjectURL(previewSrc);
+      setPreviewSrc(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewSrc(url);
+    return () => URL.revokeObjectURL(url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [file]);
 
   React.useEffect(() => {
     if (open) {
       if (initial) {
         form.setFieldsValue({
           judul: initial.judul,
-          deskripsi: initial.deskripsi,
-          tanggal_penerbitan: initial.tanggal_penerbitan ? dayjs(initial.tanggal_penerbitan) : undefined,
+          deskripsi: initial.deskripsi ?? '',
+          tanggal_penerbitan: initial.tanggal_penerbitan ? (dayjs.isDayjs(initial.tanggal_penerbitan) ? initial.tanggal_penerbitan : dayjs(initial.tanggal_penerbitan)) : undefined,
         });
       } else {
         form.resetFields();
+        form.setFieldsValue({ deskripsi: '' }); // default string kosong
       }
       setFile(null);
     }
@@ -55,17 +82,23 @@ export default function NewsFormDrawer({
       return Upload.LIST_IGNORE;
     }
     setFile(f);
-    return false; // jangan auto upload
+    return false;
   };
 
   const removeFile = () => setFile(null);
+
+  const stripHtml = (html?: string) =>
+    (html || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .trim();
 
   const submit = async () => {
     const v = await form.validateFields();
     onSubmit(
       {
         judul: v.judul.trim(),
-        deskripsi: v.deskripsi.trim(),
+        deskripsi: v.deskripsi, // sudah berupa HTML string
         tanggal_penerbitan: v.tanggal_penerbitan,
       },
       file
@@ -93,23 +126,40 @@ export default function NewsFormDrawer({
         <Form.Item
           name='judul'
           label='Judul'
-          rules={[{ required: true, message: 'Judul wajib' }]}
+          rules={[
+            { required: true, message: 'Judul wajib' },
+            { whitespace: true, message: 'Judul tidak boleh hanya spasi' },
+          ]}
         >
           <Input
             placeholder='Judul berita'
             maxLength={160}
             showCount
+            disabled={loading}
           />
         </Form.Item>
 
+        {/* WYSIWYG */}
         <Form.Item
           name='deskripsi'
           label='Deskripsi'
-          rules={[{ required: true, message: 'Deskripsi wajib' }]}
+          // Ambil value dari argumen pertama onChange ReactQuill (html string)
+          getValueFromEvent={(content: string) => content}
+          rules={[
+            {
+              validator: async (_, value: string) => {
+                if (stripHtml(value).length === 0) {
+                  return Promise.reject(new Error('Deskripsi wajib'));
+                }
+              },
+            },
+          ]}
         >
-          <TextArea
-            rows={6}
-            placeholder='Konten berita...'
+          <ReactQuill
+            theme='snow'
+            modules={quillModules}
+            readOnly={loading}
+            // value & onChange dikontrol oleh Form via getValueFromEvent
           />
         </Form.Item>
 
@@ -118,10 +168,14 @@ export default function NewsFormDrawer({
           label='Tanggal Penerbitan'
           rules={[{ required: true, message: 'Tanggal penerbitan wajib' }]}
         >
-          <DatePicker style={{ width: '100%' }} />
+          <DatePicker
+            style={{ width: '100%' }}
+            format='DD MMM YYYY'
+            disabled={loading}
+          />
         </Form.Item>
 
-        {/* Preview gambar lama (jika edit & tidak memilih file baru) */}
+        {/* Preview gambar lama (edit) */}
         {initial?.foto_url && !file && (
           <div style={{ marginBottom: 12 }}>
             <div style={{ marginBottom: 8, fontWeight: 500 }}>Gambar saat ini</div>
@@ -129,6 +183,18 @@ export default function NewsFormDrawer({
               width={160}
               src={initial.foto_url}
               alt='current'
+            />
+          </div>
+        )}
+
+        {/* Preview file baru */}
+        {previewSrc && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 8, fontWeight: 500 }}>Preview gambar baru</div>
+            <Image
+              width={160}
+              src={previewSrc}
+              alt='new'
             />
           </div>
         )}
@@ -143,6 +209,7 @@ export default function NewsFormDrawer({
             }}
             maxCount={1}
             accept='image/*'
+            disabled={loading}
             fileList={file ? [{ uid: '-1', name: file.name, size: file.size, status: 'done' as const }] : []}
           >
             <p className='ant-upload-drag-icon'>
@@ -160,6 +227,7 @@ export default function NewsFormDrawer({
               setFile(null);
               onClose();
             }}
+            disabled={loading}
           >
             Batal
           </Button>
