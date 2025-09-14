@@ -32,7 +32,6 @@ export default function LoginForm(props: Props) {
         return;
       }
 
-      await auth?.login(response.token, response.expiresIn || 3600);
       await auth?.login(response.token, response.expiresIn || 60 * 60 * 24);
 
       api.success({
@@ -40,7 +39,7 @@ export default function LoginForm(props: Props) {
         description: 'Selamat datang di dashboard admin.',
       });
     } catch (error: any) {
-      console.error('❌ Login error:', error);
+      console.error('Login error:', error);
       api.error({
         message: 'Terjadi Kesalahan',
         description: error?.message || 'Gagal login. Coba lagi nanti.',

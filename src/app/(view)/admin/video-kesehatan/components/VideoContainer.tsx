@@ -1,9 +1,10 @@
+// src/app/(view)/admin/video-kesehatan/components/VideoContainer.tsx
 'use client';
 
 import React from 'react';
-import { Card, Table, Tag, Popconfirm, message, Button, Space, Tooltip, Input, DatePicker, Typography, Flex } from 'antd';
+import { Card, Table, Tag, Popconfirm, message, Button, Space, Input, DatePicker, Typography, Flex, Modal } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, DeleteOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import VideoFormDrawer, { VideoFormValues } from './VideoFormDrawer';
 import { apiAuth } from '@/utils/apiAuth';
@@ -41,6 +42,7 @@ export default function VideoContainer() {
   // Drawer
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Video | null>(null);
+  const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     try {
@@ -154,21 +156,25 @@ export default function VideoContainer() {
       render: (text: string) => <strong>{text}</strong>,
     },
     {
-      title: 'URL Video',
+      title: 'Deskripsi',
+      dataIndex: 'deskripsi',
+      key: 'deskripsi',
+      render: (text: string) => <div dangerouslySetInnerHTML={{ __html: text }} />,
+    },
+    {
+      title: 'Video',
       dataIndex: 'video_url',
       key: 'video',
       width: 120,
       render: (url: string | null) =>
         url ? (
-          <Tooltip title={url}>
-            <a
-              href={url}
-              target='_blank'
-              rel='noopener noreferrer'
-            >
-              <LinkOutlined />
-            </a>
-          </Tooltip>
+          <Button
+            type='link'
+            icon={<PlayCircleOutlined />}
+            onClick={() => setVideoUrl(url)}
+          >
+            Lihat
+          </Button>
         ) : (
           <Tag color='default'>Tidak ada</Tag>
         ),
@@ -297,6 +303,22 @@ export default function VideoContainer() {
         }}
         onSubmit={handleSubmit}
       />
+      <Modal
+        open={!!videoUrl}
+        footer={null}
+        onCancel={() => setVideoUrl(null)}
+        width={800}
+        destroyOnClose
+        centered
+      >
+        {videoUrl && (
+          <video
+            src={videoUrl}
+            controls
+            style={{ width: '100%' }}
+          />
+        )}
+      </Modal>
     </Space>
   );
 }

@@ -1,12 +1,16 @@
+// src/app/(view)/admin/video-kesehatan/components/VideoFormDrawer.tsx
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { Drawer, Form, Input, DatePicker, Upload, Space, Button, message, Tag } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
+import 'react-quill/dist/quill.snow.css';
 
-const { TextArea } = Input;
 const { Dragger } = Upload;
+
+const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
 export type VideoFormValues = {
   judul: string;
@@ -29,17 +33,30 @@ export default function VideoFormDrawer({
 }) {
   const [form] = Form.useForm<VideoFormValues>();
   const [file, setFile] = React.useState<File | null>(null);
+  const quillModules = React.useMemo(
+    () => ({
+      toolbar: [[{ header: [1, 2, 3, false] }], ['bold', 'italic', 'underline', 'strike'], [{ list: 'ordered' }, { list: 'bullet' }], [{ align: [] }], ['link', 'blockquote', 'code-block'], ['clean']],
+    }),
+    []
+  );
+
+  const stripHtml = (html?: string) =>
+    (html || '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .trim();
 
   React.useEffect(() => {
     if (open) {
       if (initial) {
         form.setFieldsValue({
           judul: initial.judul,
-          deskripsi: initial.deskripsi,
+          deskripsi: initial.deskripsi ?? '',
           tanggal_penerbitan: initial.tanggal_penerbitan ? dayjs(initial.tanggal_penerbitan) : undefined,
         });
       } else {
         form.resetFields();
+        form.setFieldsValue({ deskripsi: '' });
       }
       setFile(null);
     }
@@ -65,7 +82,7 @@ export default function VideoFormDrawer({
     onSubmit(
       {
         judul: v.judul.trim(),
-        deskripsi: v.deskripsi.trim(),
+        deskripsi: v.deskripsi,
         tanggal_penerbitan: v.tanggal_penerbitan,
       },
       file
@@ -85,16 +102,49 @@ export default function VideoFormDrawer({
       destroyOnClose
       maskClosable={false}
     >
-      <Form form={form} layout='vertical' onFinish={submit}>
-        <Form.Item name='judul' label='Judul' rules={[{ required: true, message: 'Judul wajib' }]}>
-          <Input placeholder='Judul video' maxLength={160} showCount />
+      <Form
+        form={form}
+        layout='vertical'
+        onFinish={submit}
+      >
+        <Form.Item
+          name='judul'
+          label='Judul'
+          rules={[{ required: true, message: 'Judul wajib' }]}
+        >
+          <Input
+            placeholder='Judul video'
+            maxLength={160}
+            showCount
+          />
         </Form.Item>
 
-        <Form.Item name='deskripsi' label='Deskripsi' rules={[{ required: true, message: 'Deskripsi wajib' }]}>
-          <TextArea rows={6} placeholder='Konten video...' />
+        <Form.Item
+          name='deskripsi'
+          label='Deskripsi'
+          getValueFromEvent={(content: string) => content}
+          rules={[
+            {
+              validator: async (_, value: string) => {
+                if (stripHtml(value).length === 0) {
+                  return Promise.reject(new Error('Deskripsi wajib'));
+                }
+              },
+            },
+          ]}
+        >
+          <ReactQuill
+            theme='snow'
+            modules={quillModules}
+            readOnly={loading}
+          />
         </Form.Item>
 
-        <Form.Item name='tanggal_penerbitan' label='Tanggal Penerbitan' rules={[{ required: true, message: 'Tanggal penerbitan wajib' }]}>
+        <Form.Item
+          name='tanggal_penerbitan'
+          label='Tanggal Penerbitan'
+          rules={[{ required: true, message: 'Tanggal penerbitan wajib' }]}
+        >
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
 
@@ -117,17 +167,29 @@ export default function VideoFormDrawer({
             accept='video/*'
             fileList={file ? [{ uid: '-1', name: file.name, size: file.size, status: 'done' as const }] : []}
           >
-            <p className='ant-upload-drag-icon'><InboxOutlined /></p>
+            <p className='ant-upload-drag-icon'>
+              <InboxOutlined />
+            </p>
             <p className='ant-upload-text'>Klik atau seret file ke area ini</p>
             <p className='ant-upload-hint'>Hanya video, maksimal 50MB.</p>
           </Dragger>
         </Form.Item>
 
         <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Button onClick={() => { form.resetFields(); setFile(null); onClose(); }}>
+          <Button
+            onClick={() => {
+              form.resetFields();
+              setFile(null);
+              onClose();
+            }}
+          >
             Batal
           </Button>
-          <Button type='primary' htmlType='submit' loading={loading}>
+          <Button
+            type='primary'
+            htmlType='submit'
+            loading={loading}
+          >
             {initial ? 'Simpan Perubahan' : 'Tambah Video'}
           </Button>
         </Space>
