@@ -1,10 +1,32 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
+function mapAntreanRow(row: any) {
+  const { slot, ...rest } = row;
+  const jamMulai = slot?.jadwal?.jam_mulai ?? null;
+  const tanggalKunjungan = jamMulai ? new Date(jamMulai).toISOString() : new Date(rest.createdAt).toISOString();
+  return {
+    ...rest,
+    tanggal_kunjungan: tanggalKunjungan,
+    slot,
+  };
+}
+
 function bool(v: any) {
   if (typeof v === 'boolean') return v;
   if (typeof v === 'string') return ['1', 'true', 't', 'ya', 'y'].includes(v.toLowerCase());
   return !!v;
+}
+
+function parseDateOnlyUTC(s: any) {
+  if (!s) return null;
+  if (typeof s === 'string') {
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  }
+  const d = new Date(s);
+  if (Number.isNaN(d.valueOf())) return null;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
 export async function GET(req: Request) {
@@ -20,15 +42,18 @@ export async function GET(req: Request) {
 
     const where: any = {};
 
+
     if (status && ['MENUNGGU', 'DIPROSES', 'SELESAI', 'DIBATALKAN'].includes(status)) where.status = status;
     if (id_dokter) where.id_dokter = id_dokter;
     if (id_layanan) where.id_layanan = id_layanan;
     if (id_user) where.id_user = id_user;
 
     if (dateFrom || dateTo) {
-      where.tanggal_kunjungan = {};
-      if (dateFrom) where.tanggal_kunjungan.gte = new Date(dateFrom);
-      if (dateTo) where.tanggal_kunjungan.lte = new Date(dateTo);
+      where.slot = where.slot || {};
+      where.slot.jadwal = where.slot.jadwal || {};
+      where.slot.jadwal.jam_mulai = where.slot.jadwal.jam_mulai || {};
+      if (dateFrom) where.slot.jadwal.jam_mulai.gte = new Date(dateFrom);
+      if (dateTo) where.slot.jadwal.jam_mulai.lte = new Date(dateTo);
     }
 
     // pencarian sederhana di user/dokter/layanan/alamat
@@ -44,15 +69,22 @@ export async function GET(req: Request) {
 
     const rows = await prisma.antrean.findMany({
       where,
-      orderBy: { tanggal_kunjungan: 'asc' },
+      orderBy: [{ slot: { jadwal: { jam_mulai: 'asc' } } }, { createdAt: 'asc' }],
       include: {
         user: { select: { id_user: true, nama: true, no_telepon: true } },
         dokter: { select: { id_dokter: true, nama_dokter: true, spesialisasi: true } },
         layanan: { select: { id_layanan: true, nama_layanan: true } },
+        tanggungan: { select: { id_tanggungan: true, nama_tanggungan: true } },
+        slot: {
+          select: {
+            id_slot: true,
+            jadwal: { select: { jam_mulai: true } },
+          },
+        },
       },
     });
 
-    return NextResponse.json(rows);
+    return NextResponse.json(rows.map(mapAntreanRow));
   } catch (e: any) {
     return NextResponse.json({ message: 'Internal error', error: e?.message }, { status: 500 });
   }
@@ -61,10 +93,42 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { id_user, id_dokter, id_layanan, id_tanggungan, id_slot, alamat_user } = body ?? {};
+    const {
+      id_user,
+      id_dokter,
+      id_layanan,
+      id_tanggungan,
+      id_slot,
+      alamat_user,
+      tanggal_lahir,
+      nama_pasien,
+      jenis_kelamin,
+      telepon,
+    } = body ?? {};
 
-    if (!id_user || !id_dokter || !id_layanan || !id_slot || !alamat_user) {
-      return NextResponse.json({ message: 'id_user, id_dokter, id_layanan, id_slot, dan alamat_user wajib diisi' }, { status: 400 });
+    const namaPasien = String(nama_pasien || '').trim();
+    const jenisKelamin = String(jenis_kelamin || '').trim();
+    const teleponTrim = String(telepon || '').trim();
+    const alamatTrim = String(alamat_user || '').trim();
+    const dob = parseDateOnlyUTC(tanggal_lahir);
+
+    if (!id_user || !id_dokter || !id_layanan || !id_slot) {
+      return NextResponse.json({ message: 'id_user, id_dokter, id_layanan, dan id_slot wajib diisi' }, { status: 400 });
+    }
+    if (!alamatTrim) {
+      return NextResponse.json({ message: 'alamat_user wajib diisi' }, { status: 400 });
+    }
+    if (!dob) {
+      return NextResponse.json({ message: 'tanggal_lahir wajib diisi (format YYYY-MM-DD)' }, { status: 400 });
+    }
+    if (!namaPasien) {
+      return NextResponse.json({ message: 'nama_pasien wajib diisi' }, { status: 400 });
+    }
+    if (!jenisKelamin) {
+      return NextResponse.json({ message: 'jenis_kelamin wajib diisi' }, { status: 400 });
+    }
+    if (!teleponTrim) {
+      return NextResponse.json({ message: 'telepon wajib diisi' }, { status: 400 });
     }
 
     // Ambil slot + kapasitas + waktu (fallback lewat relasi jadwal bila kolom jam_mulai di slot tidak ada)
@@ -84,6 +148,12 @@ export async function POST(req: Request) {
     });
     if (terisi >= slot.kapasitas) return NextResponse.json({ message: 'Slot penuh' }, { status: 400 });
 
+    const { _max } = await prisma.antrean.aggregate({
+      where: { id_slot },
+      _max: { no_antrean: true },
+    });
+    const no_antrean = (_max.no_antrean ?? 0) + 1;
+
     // Snapshot nama dokter
     const d = await prisma.dokter.findUnique({ where: { id_dokter }, select: { nama_dokter: true } });
     const dokter_nama_snapshot = d?.nama_dokter || null;
@@ -96,13 +166,29 @@ export async function POST(req: Request) {
         id_layanan,
         id_tanggungan: id_tanggungan || null,
         id_slot,
-        tanggal_kunjungan: new Date(jamMulai),
-        alamat_user,
+        tanggal_lahir: dob,
+        alamat_user: alamatTrim,
+        nama_pasien: namaPasien,
+        jenis_kelamin: jenisKelamin,
+        telepon: teleponTrim,
+        no_antrean,
         dokter_nama_snapshot,
+      },
+      include: {
+        user: { select: { id_user: true, nama: true, no_telepon: true } },
+        dokter: { select: { id_dokter: true, nama_dokter: true, spesialisasi: true } },
+        layanan: { select: { id_layanan: true, nama_layanan: true } },
+        tanggungan: { select: { id_tanggungan: true, nama_tanggungan: true } },
+        slot: {
+          select: {
+            id_slot: true,
+            jadwal: { select: { jam_mulai: true } },
+          },
+        },
       },
     });
 
-    return NextResponse.json(row, { status: 201 });
+    return NextResponse.json(mapAntreanRow(row), { status: 201 });
   } catch (e: any) {
     // Unique constraint (double book)
     if (e?.code === 'P2002') {
