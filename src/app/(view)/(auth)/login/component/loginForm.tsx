@@ -58,7 +58,7 @@ export default function LoginForm(props: Props) {
       >
         <Form.Item<FieldType>
           name='email'
-          rules={[{ required: true, message: 'Masukkan email Anda!' }]}
+          rules={[{ required: true, message: 'Masukkan email Anda !' }]}
         >
           <Input
             prefix={<UserOutlined />}
