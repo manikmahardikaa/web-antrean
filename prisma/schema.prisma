@@ -29,7 +29,7 @@ enum StatusAntrean {
 
 // ===== Models =====
 model User {
-  id_user       String   @id @default(uuid())
+  id_user       String   @id @default(uuid()) @db.Char(36)
   nama          String
   email         String   @unique
   tanggal_lahir DateTime @db.Date
@@ -38,8 +38,8 @@ model User {
   alamat        String?
   password      String
   role          Role     @default(USER)
-  id_layanan    String?
-  id_tanggungan String?
+  id_layanan    String?  @db.Char(36)
+  id_tanggungan String?  @db.Char(36)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
 
@@ -52,7 +52,7 @@ model User {
 }
 
 model Layanan {
-  id_layanan      String    @id @default(uuid())
+  id_layanan      String    @id @default(uuid()) @db.Char(36)
   nama_layanan    String
   is_active       Boolean   @default(true)
   deletedAt       DateTime?
@@ -69,7 +69,7 @@ model Layanan {
 }
 
 model Tanggungan {
-  id_tanggungan   String    @id @default(uuid())
+  id_tanggungan   String    @id @default(uuid()) @db.Char(36)
   nama_tanggungan String
   is_active       Boolean   @default(true)
   deletedAt       DateTime?
@@ -86,7 +86,7 @@ model Tanggungan {
 }
 
 model Dokter {
-  id_dokter          String    @id @default(uuid())
+  id_dokter          String    @id @default(uuid()) @db.Char(36)
   nama_dokter        String
   spesialisasi       String
   foto_profil_dokter String?   @db.LongText
@@ -105,23 +105,23 @@ model Dokter {
 }
 
 model JadwalPraktik {
-  id_jadwal   String   @id @default(uuid())
-  id_dokter   String
+  id_jadwal   String   @id @default(uuid()) @db.Char(36)
+  id_dokter   String   @db.Char(36)
   tanggal     DateTime @db.Date
   jam_mulai   DateTime
   jam_selesai DateTime
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
 
-  dokter Dokter @relation(fields: [id_dokter], references: [id_dokter], onDelete: Cascade)
+  dokter Dokter       @relation(fields: [id_dokter], references: [id_dokter], onDelete: Cascade)
   slot   SlotPraktik?
 
   @@index([id_dokter, tanggal])
 }
 
 model SlotPraktik {
-  id_slot   String   @id @default(uuid())
-  id_jadwal String
+  id_slot   String   @id @default(uuid()) @db.Char(36)
+  id_jadwal String   @db.Char(36)
   kapasitas Int      @default(1)
   terisi    Int      @default(0)
   is_active Boolean  @default(true)
@@ -136,12 +136,12 @@ model SlotPraktik {
 }
 
 model Antrean {
-  id_antrean     String        @id @default(uuid())
-  id_user        String
-  id_dokter      String
-  id_layanan     String
-  id_tanggungan  String?
-  id_slot        String
+  id_antrean     String        @id @default(uuid()) @db.Char(36)
+  id_user        String        @db.Char(36)
+  id_dokter      String        @db.Char(36)
+  id_layanan     String        @db.Char(36)
+  id_tanggungan  String?       @db.Char(36)
+  id_slot        String        @db.Char(36)
   tanggal_lahir  DateTime      @db.Date
   status         StatusAntrean @default(MENUNGGU)
   alamat_user    String
@@ -185,9 +185,8 @@ model Antrean {
   @@index([id_slot, createdAt])
 }
 
-
 model BeritaKesehatan {
-  id_berita          String   @id @default(uuid())
+  id_berita          String   @id @default(uuid()) @db.Char(36)
   judul              String
   deskripsi          String
   tanggal_penerbitan DateTime @db.Date
@@ -199,7 +198,7 @@ model BeritaKesehatan {
 }
 
 model VideoKesehatan {
-  id_video           String   @id @default(uuid())
+  id_video           String   @id @default(uuid()) @db.Char(36)
   judul              String
   deskripsi          String
   tanggal_penerbitan DateTime @db.Date
