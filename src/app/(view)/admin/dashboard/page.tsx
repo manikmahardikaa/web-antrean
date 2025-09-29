@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Row, Col, Card, Statistic, Table, Tag, Space, Typography, Button, DatePicker, Select, List, Progress, Divider, Skeleton, Empty } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import { UserOutlined, TeamOutlined, CalendarOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import dayjs, { Dayjs } from 'dayjs';
+import useDashboard from './useDashboard';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -14,7 +17,7 @@ type AntreanRow = {
   pasien: string;
   dokter: string;
   layanan: string;
-  tanggal: string; // ISO atau formatted string
+  tanggal: string; // ISO string
   status: StatusAntrean;
   alamat_user: string;
 };
@@ -26,86 +29,29 @@ const statusColor: Record<StatusAntrean, string> = {
   DIBATALKAN: 'red',
 };
 
-export default function AdminPageDashboard() {
-  // state demo – sambungkan ke data asli/endpoint kamu nanti
-  const [loading, setLoading] = useState(false);
-  const [range, setRange] = useState<[any, any] | null>(null);
-  const [filterLayanan, setFilterLayanan] = useState<string | undefined>();
+export default function Page() {
+  // Global filter
+  const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null);
+  const [filterLayananId, setFilterLayananId] = useState<string | undefined>();
 
-  // Mock data (ganti dari API kamu)
-  const summary = useMemo(
-    () => ({
-      totalUser: 1280,
-      totalDokter: 24,
-      antreanHariIni: 86,
-      dibatalkanHariIni: 7,
-    }),
-    []
-  );
+  // Build params untuk hook
+  const start = range?.[0]?.format('YYYY-MM-DD');
+  const end = range?.[1]?.format('YYYY-MM-DD');
 
-  const dataAntrean: AntreanRow[] = useMemo(
-    () => [
-      {
-        key: '1',
-        pasien: 'Made Arta',
-        dokter: 'drg. Ayu Mahendrani',
-        layanan: 'Scaling',
-        tanggal: '2025-08-08 10:30',
-        status: 'MENUNGGU',
-        alamat_user: 'Jl. Gatot Subroto Timur No. 10',
-      },
-      {
-        key: '2',
-        pasien: 'I Gde Surya',
-        dokter: 'drg. Rai Pramana',
-        layanan: 'Tambal Gigi',
-        tanggal: '2025-08-08 11:00',
-        status: 'DIPROSES',
-        alamat_user: 'Jl. Teuku Umar Barat No. 5',
-      },
-      {
-        key: '3',
-        pasien: 'Ni Putu Sinta',
-        dokter: 'drg. Ayu Mahendrani',
-        layanan: 'Konsultasi',
-        tanggal: '2025-08-08 12:15',
-        status: 'SELESAI',
-        alamat_user: 'Jl. Mahendradatta No. 88',
-      },
-      {
-        key: '4',
-        pasien: 'Kadek Yoga',
-        dokter: 'drg. Rai Pramana',
-        layanan: 'Cabut Gigi',
-        tanggal: '2025-08-08 09:45',
-        status: 'DIBATALKAN',
-        alamat_user: 'Jl. Diponegoro No. 2',
-      },
-    ],
-    []
-  );
+  const { data, isLoading, refresh } = useDashboard(start && end ? [start, end] : null, filterLayananId);
 
-  const topLayanan = useMemo(
-    () => [
-      { nama: 'Konsultasi', total: 320 },
-      { nama: 'Scaling', total: 240 },
-      { nama: 'Tambal Gigi', total: 190 },
-      { nama: 'Cabut Gigi', total: 110 },
-    ],
-    []
-  );
+  const summary = data?.summary ?? {
+    totalUser: 0,
+    totalDokter: 0,
+    antreanHariIni: 0,
+    dibatalkanHariIni: 0,
+  };
+  const dataAntrean: AntreanRow[] = data?.recentAntrean ?? [];
+  const topLayanan = data?.topLayanan ?? [];
+  const upcomingJadwal = data?.upcomingJadwal ?? [];
+  const tren7Hari = data?.tren7Hari ?? [];
 
-  const upcomingJadwal = useMemo(
-    () => [
-      { waktu: '10:30', dokter: 'drg. Ayu Mahendrani', layanan: 'Scaling' },
-      { waktu: '11:00', dokter: 'drg. Rai Pramana', layanan: 'Tambal Gigi' },
-      { waktu: '12:15', dokter: 'drg. Ayu Mahendrani', layanan: 'Konsultasi' },
-      { waktu: '13:30', dokter: 'drg. Putri Astini', layanan: 'Perawatan Saraf' },
-    ],
-    []
-  );
-
-  const columns = [
+  const columns: ColumnsType<AntreanRow> = [
     {
       title: 'Pasien',
       dataIndex: 'pasien',
@@ -123,29 +69,25 @@ export default function AdminPageDashboard() {
       title: 'Layanan',
       dataIndex: 'layanan',
       key: 'layanan',
-      filters: [
-        { text: 'Konsultasi', value: 'Konsultasi' },
-        { text: 'Scaling', value: 'Scaling' },
-        { text: 'Tambal Gigi', value: 'Tambal Gigi' },
-        { text: 'Cabut Gigi', value: 'Cabut Gigi' },
-      ],
-      onFilter: (val: any, rec: AntreanRow) => rec.layanan === val,
+      filters: topLayanan.map((x) => ({ text: x.nama, value: x.nama })),
+      onFilter: (val, rec) => rec.layanan === val,
     },
     {
       title: 'Tanggal',
       dataIndex: 'tanggal',
       key: 'tanggal',
-      sorter: (a: AntreanRow, b: AntreanRow) => a.tanggal.localeCompare(b.tanggal),
-      width: 150,
+      sorter: (a, b) => a.tanggal.localeCompare(b.tanggal),
+      width: 170,
       responsive: ['md'],
+      render: (iso: string) => (iso ? dayjs(iso).format('YYYY-MM-DD HH:mm') : '-'),
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (s: StatusAntrean) => <Tag color={statusColor[s]}>{s}</Tag>,
       width: 140,
-      align: 'center' as const,
+      align: 'center',
+      render: (s: StatusAntrean) => <Tag color={statusColor[s]}>{s}</Tag>,
     },
     {
       title: 'Alamat',
@@ -156,12 +98,7 @@ export default function AdminPageDashboard() {
     },
   ];
 
-  const handleRefresh = () => {
-    setLoading(true);
-    setTimeout(() => setLoading(false), 800); // simulasi
-  };
-
-  const maxTotal = Math.max(...topLayanan.map((i) => i.total));
+  const maxTotal = Math.max(1, ...topLayanan.map((i) => i.total));
 
   return (
     <Space
@@ -190,19 +127,15 @@ export default function AdminPageDashboard() {
             <Select
               placeholder='Filter layanan'
               allowClear
-              style={{ width: 180 }}
-              value={filterLayanan}
-              onChange={(v) => setFilterLayanan(v)}
-              options={[
-                { label: 'Konsultasi', value: 'Konsultasi' },
-                { label: 'Scaling', value: 'Scaling' },
-                { label: 'Tambal Gigi', value: 'Tambal Gigi' },
-                { label: 'Cabut Gigi', value: 'Cabut Gigi' },
-              ]}
+              style={{ width: 220 }}
+              value={filterLayananId}
+              onChange={(v) => setFilterLayananId(v)}
+              // Ambil pilihan dari topLayanan (id + nama)
+              options={topLayanan.map((x) => ({ label: x.nama, value: x.id_layanan }))}
             />
             <Button
               icon={<ReloadOutlined />}
-              onClick={handleRefresh}
+              onClick={() => refresh()}
             >
               Refresh
             </Button>
@@ -210,7 +143,7 @@ export default function AdminPageDashboard() {
         </Col>
       </Row>
 
-      {/* Top summary cards */}
+      {/* Summary cards */}
       <Row gutter={[16, 16]}>
         <Col
           xs={24}
@@ -278,19 +211,19 @@ export default function AdminPageDashboard() {
         </Col>
       </Row>
 
-      {/* Middle: Left (placeholder chart) + Right (Upcoming) */}
+      {/* Middle: Tren (placeholder chart) + Jadwal Terdekat */}
       <Row gutter={[16, 16]}>
         <Col
           xs={24}
           lg={16}
         >
           <Card title='Tren Antrean (7 hari)'>
-            {loading ? (
+            {isLoading ? (
               <Skeleton
                 active
                 paragraph={{ rows: 6 }}
               />
-            ) : (
+            ) : tren7Hari.length === 0 ? (
               <div
                 style={{
                   height: 260,
@@ -303,6 +236,19 @@ export default function AdminPageDashboard() {
               >
                 <Empty description='Grafik belum dihubungkan' />
               </div>
+            ) : (
+              <div
+                style={{
+                  height: 260,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px dashed var(--ant-color-border)',
+                  borderRadius: 8,
+                }}
+              >
+                <Text type='secondary'>Data siap: {tren7Hari.map((d) => d.tanggal).join(', ')} (render chart kemudian)</Text>
+              </div>
             )}
           </Card>
         </Col>
@@ -311,7 +257,7 @@ export default function AdminPageDashboard() {
           lg={8}
         >
           <Card title='Jadwal Terdekat'>
-            {loading ? (
+            {isLoading ? (
               <Skeleton active />
             ) : (
               <List
@@ -336,7 +282,7 @@ export default function AdminPageDashboard() {
         </Col>
       </Row>
 
-      {/* Bottom: Left (Table recent) + Right (Top layanan) */}
+      {/* Bottom: Antrean Terbaru + Top Layanan */}
       <Row gutter={[16, 16]}>
         <Col
           xs={24}
@@ -348,9 +294,9 @@ export default function AdminPageDashboard() {
           >
             <Table<AntreanRow>
               size='middle'
-              loading={loading}
-              columns={columns as any}
-              dataSource={filterLayanan ? dataAntrean.filter((d) => d.layanan === filterLayanan) : dataAntrean}
+              loading={isLoading}
+              columns={columns}
+              dataSource={dataAntrean}
               pagination={{ pageSize: 6 }}
               scroll={{ x: 960 }}
               rowKey='key'
@@ -362,24 +308,30 @@ export default function AdminPageDashboard() {
           lg={8}
         >
           <Card title='Top Layanan'>
-            {topLayanan.map((item) => {
-              const percent = Math.round((item.total / maxTotal) * 100);
-              return (
-                <div
-                  key={item.nama}
-                  style={{ marginBottom: 16 }}
-                >
-                  <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                    <Text>{item.nama}</Text>
-                    <Text type='secondary'>{item.total}</Text>
-                  </Space>
-                  <Progress
-                    percent={percent}
-                    showInfo={false}
-                  />
-                </div>
-              );
-            })}
+            {isLoading && topLayanan.length === 0 ? (
+              <Skeleton active />
+            ) : topLayanan.length === 0 ? (
+              <Empty description='Belum ada data' />
+            ) : (
+              topLayanan.map((item) => {
+                const percent = Math.round((item.total / maxTotal) * 100);
+                return (
+                  <div
+                    key={item.id_layanan}
+                    style={{ marginBottom: 16 }}
+                  >
+                    <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                      <Text>{item.nama}</Text>
+                      <Text type='secondary'>{item.total}</Text>
+                    </Space>
+                    <Progress
+                      percent={percent}
+                      showInfo={false}
+                    />
+                  </div>
+                );
+              })
+            )}
           </Card>
         </Col>
       </Row>
