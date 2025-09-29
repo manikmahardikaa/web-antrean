@@ -66,5 +66,6 @@ export const ApiEndpoints = {
   GetVideoById: (id: string) => `/api/video-kesehatan/${id}`,
   UpdateVideo: (id: string) => `/api/video-kesehatan/${id}`,
   DeleteVideo: (id: string) => `/api/video-kesehatan/${id}`,
-} as const;
 
+  GetDashboard: '/api/admin/dashboard',
+} as const;

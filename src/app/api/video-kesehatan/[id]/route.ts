@@ -27,7 +27,7 @@ function extractPathFromPublicUrl(publicUrl: string | null | undefined, bucket =
     const idx = u.pathname.indexOf(marker);
     if (idx === -1) return null;
     return decodeURIComponent(u.pathname.substring(idx + marker.length));
-  } catch {
+  } catch { 
     return null;
   }
 }
