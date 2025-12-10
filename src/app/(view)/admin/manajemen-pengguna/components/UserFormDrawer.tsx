@@ -1,8 +1,9 @@
 'use client';
 
-import { Drawer, Form, Input, DatePicker, Select, Space, Button, InputNumber } from 'antd';
+import { Drawer, Form, Input, DatePicker, Select, Space, Button } from 'antd';
 import dayjs from 'dayjs';
 import type { UserRow, Role } from './UserContainer';
+import { getGenderLabel } from './gender';
 import 'dayjs/locale/id';
 
 type Option = { label: string; value: string };
@@ -47,7 +48,7 @@ export default function UserFormDrawer({
             email: editing?.email ?? '',
             password: '', // tidak di-prefill
             tanggal_lahir: editing?.tanggal_lahir ? dayjs(editing.tanggal_lahir) : null,
-            jenis_kelamin: editing?.jenis_kelamin?.toUpperCase().startsWith('Pria') ? 'Pria' : 'Wanita',
+            jenis_kelamin: getGenderLabel(editing?.jenis_kelamin) === 'Wanita' ? 'Wanita' : 'Pria',
             no_telepon: editing?.no_telepon ?? '',
             alamat: editing?.alamat ?? '',
             role: editing?.role ?? 'USER',

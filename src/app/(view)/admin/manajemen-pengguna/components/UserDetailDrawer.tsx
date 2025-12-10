@@ -3,6 +3,7 @@
 import { Drawer, Descriptions, Tag } from 'antd';
 import dayjs from 'dayjs';
 import type { UserRow } from './UserContainer';
+import { getGenderLabel } from './gender';
 import 'dayjs/locale/id';
 dayjs.locale('id');
 
@@ -26,7 +27,7 @@ export default function UserDetailDrawer({ open, row, onClose }: { open: boolean
           <Descriptions.Item label='Email'>{row.email}</Descriptions.Item>
           <Descriptions.Item label='No. Telepon'>{row.no_telepon}</Descriptions.Item>
           <Descriptions.Item label='Tanggal Lahir'>{fmtDate(row.tanggal_lahir)}</Descriptions.Item>
-          <Descriptions.Item label='Jenis Kelamin'>{row.jenis_kelamin?.toUpperCase().startsWith('Pria') ? 'Pria' : 'Wanita'}</Descriptions.Item>
+          <Descriptions.Item label='Jenis Kelamin'>{getGenderLabel(row.jenis_kelamin) || '-'}</Descriptions.Item>
           <Descriptions.Item label='Role'>
             <Tag color={row.role === 'ADMIN' ? 'magenta' : 'blue'}>{row.role}</Tag>
           </Descriptions.Item>

@@ -8,6 +8,7 @@ import { apiAuth } from '@/utils/apiAuth';
 import { ApiEndpoints } from '@/constraints/api-endpoints';
 import UserFormDrawer from './UserFormDrawer';
 import UserDetailDrawer from './UserDetailDrawer';
+import { getGenderLabel, matchesGenderFilter } from './gender';
 import 'dayjs/locale/id';
 
 const { Text } = Typography;
@@ -77,7 +78,7 @@ export default function UserContainer({ filters, layananOpts, tanggunganOpts, re
     const q = query.toLowerCase();
     return list
       .filter((r) => (roleFilter === 'ALL' ? true : r.role === roleFilter))
-      .filter((r) => (genderFilter === 'ALL' ? true : (r.jenis_kelamin || '').toUpperCase().startsWith(genderFilter)))
+      .filter((r) => matchesGenderFilter(r.jenis_kelamin, genderFilter))
       .filter((r) => (!layananFilter ? true : r.id_layanan === layananFilter))
       .filter((r) => (!tanggunganFilter ? true : r.id_tanggungan === tanggunganFilter))
       .filter((r) => {
@@ -98,7 +99,7 @@ export default function UserContainer({ filters, layananOpts, tanggunganOpts, re
       key: 'jenis_kelamin',
       width: 80,
       align: 'center' as const,
-      render: (v: string) => (v?.toUpperCase().startsWith('P') ? 'Pria' : 'Wanita'),
+      render: (_: string, row: UserRow) => getGenderLabel(row.jenis_kelamin) || '-',
     },
     { title: 'Tgl Lahir', dataIndex: 'tanggal_lahir', key: 'tanggal_lahir', width: 140, render: fmtDate, responsive: ['md'] as const },
     {
