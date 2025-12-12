@@ -16,6 +16,13 @@ export type VideoFormValues = {
   video_url: string;
 };
 
+type InitialValues = {
+  judul: string;
+  deskripsi: string;
+  tanggal_penerbitan: Dayjs;
+  video_url: string | null;
+};
+
 export default function VideoFormDrawer({
   open,
   loading,
@@ -25,7 +32,7 @@ export default function VideoFormDrawer({
 }: {
   open: boolean;
   loading: boolean;
-  initial: (VideoFormValues & { video_url: string | null }) | null;
+  initial: InitialValues | null;
   onClose: () => void;
   onSubmit: (values: VideoFormValues) => void;
 }) {
