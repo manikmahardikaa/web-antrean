@@ -11,7 +11,7 @@
   "dependencies": {
     "@ant-design/icons": "^5.6.1",
     "@ant-design/nextjs-registry": "^1.1.0",
-    "@prisma/client": "^6.13.0",
+    "@prisma/client": "6.19.1",
     "@supabase/supabase-js": "^2.55.0",
     "bcrypt": "^6.0.0",
     "encrypt-storage": "^2.14.7",
