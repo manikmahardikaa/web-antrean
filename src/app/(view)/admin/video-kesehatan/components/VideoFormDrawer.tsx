@@ -3,12 +3,9 @@
 
 import React from 'react';
 import dynamic from 'next/dynamic';
-import { Drawer, Form, Input, DatePicker, Upload, Space, Button, message, Tag } from 'antd';
-import { InboxOutlined } from '@ant-design/icons';
+import { Drawer, Form, Input, DatePicker, Space, Button } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import 'react-quill/dist/quill.snow.css';
-
-const { Dragger } = Upload;
 
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
 
@@ -16,6 +13,7 @@ export type VideoFormValues = {
   judul: string;
   deskripsi: string;
   tanggal_penerbitan: Dayjs;
+  video_url: string;
 };
 
 export default function VideoFormDrawer({
@@ -29,10 +27,9 @@ export default function VideoFormDrawer({
   loading: boolean;
   initial: (VideoFormValues & { video_url: string | null }) | null;
   onClose: () => void;
-  onSubmit: (values: VideoFormValues, file?: File | null) => void;
+  onSubmit: (values: VideoFormValues) => void;
 }) {
   const [form] = Form.useForm<VideoFormValues>();
-  const [file, setFile] = React.useState<File | null>(null);
   const quillModules = React.useMemo(
     () => ({
       toolbar: [[{ header: [1, 2, 3, false] }], ['bold', 'italic', 'underline', 'strike'], [{ list: 'ordered' }, { list: 'bullet' }], [{ align: [] }], ['link', 'blockquote', 'code-block'], ['clean']],
@@ -53,29 +50,21 @@ export default function VideoFormDrawer({
           judul: initial.judul,
           deskripsi: initial.deskripsi ?? '',
           tanggal_penerbitan: initial.tanggal_penerbitan ? dayjs(initial.tanggal_penerbitan) : undefined,
+          video_url: initial.video_url || '',
         });
       } else {
         form.resetFields();
-        form.setFieldsValue({ deskripsi: '' });
+        form.setFieldsValue({ deskripsi: '', video_url: '' });
       }
-      setFile(null);
     }
   }, [open, initial, form]);
 
-  const beforeUpload = (f: File) => {
-    if (!f.type.startsWith('video/')) {
-      message.error('Hanya file video yang diizinkan');
-      return Upload.LIST_IGNORE;
-    }
-    if (f.size > 50 * 1024 * 1024) {
-      message.error('Maksimal 50MB');
-      return Upload.LIST_IGNORE;
-    }
-    setFile(f);
-    return false; // jangan auto upload
+  const isYouTubeUrl = (val: string) => {
+    if (!val) return false;
+    const trimmed = val.trim();
+    const patterns = [/^https?:\/\/(www\.)?youtube\.com\/watch\?v=[\w-]{11}/i, /^https?:\/\/(www\.)?youtu\.be\/[\w-]{11}/i, /^https?:\/\/(www\.)?youtube\.com\/embed\/[\w-]{11}/i];
+    return patterns.some((re) => re.test(trimmed));
   };
-
-  const removeFile = () => setFile(null);
 
   const submit = async () => {
     const v = await form.validateFields();
@@ -84,8 +73,8 @@ export default function VideoFormDrawer({
         judul: v.judul.trim(),
         deskripsi: v.deskripsi,
         tanggal_penerbitan: v.tanggal_penerbitan,
-      },
-      file
+        video_url: v.video_url.trim(),
+      }
     );
   };
 
@@ -96,7 +85,6 @@ export default function VideoFormDrawer({
       open={open}
       onClose={() => {
         form.resetFields();
-        setFile(null);
         onClose();
       }}
       destroyOnClose
@@ -148,38 +136,30 @@ export default function VideoFormDrawer({
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
 
-        {initial?.video_url && !file && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ marginBottom: 8, fontWeight: 500 }}>Video saat ini</div>
-            <Tag>{initial.video_url}</Tag>
-          </div>
-        )}
-
-        <Form.Item label='Video (opsional)'>
-          <Dragger
-            multiple={false}
-            beforeUpload={beforeUpload}
-            onRemove={() => {
-              removeFile();
-              return true;
-            }}
-            maxCount={1}
-            accept='video/*'
-            fileList={file ? [{ uid: '-1', name: file.name, size: file.size, status: 'done' as const }] : []}
-          >
-            <p className='ant-upload-drag-icon'>
-              <InboxOutlined />
-            </p>
-            <p className='ant-upload-text'>Klik atau seret file ke area ini</p>
-            <p className='ant-upload-hint'>Hanya video, maksimal 50MB.</p>
-          </Dragger>
+        <Form.Item
+          name='video_url'
+          label='URL Video YouTube'
+          rules={[
+            { required: true, message: 'URL YouTube wajib' },
+            {
+              validator: async (_, value: string) => {
+                if (value && !isYouTubeUrl(value)) {
+                  return Promise.reject(new Error('Masukkan URL YouTube yang valid'));
+                }
+              },
+            },
+          ]}
+        >
+          <Input
+            placeholder='Contoh: https://youtu.be/xxxxxxxxxxx'
+            disabled={loading}
+          />
         </Form.Item>
 
         <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             onClick={() => {
               form.resetFields();
-              setFile(null);
               onClose();
             }}
           >

@@ -10,6 +10,34 @@ import VideoFormDrawer, { VideoFormValues } from './VideoFormDrawer';
 import { apiAuth } from '@/utils/apiAuth';
 import { ApiEndpoints } from '@/constraints/api-endpoints';
 
+const getYouTubeEmbedUrl = (url: string | null): string | null => {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+
+    if (host.includes('youtu.be')) {
+      const id = u.pathname.replace('/', '').split('/').filter(Boolean)[0];
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+
+    if (host.includes('youtube.com')) {
+      if (u.pathname === '/watch') {
+        const id = u.searchParams.get('v');
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+      const parts = u.pathname.split('/');
+      const embedIdx = parts.findIndex((p) => p === 'embed');
+      if (embedIdx !== -1 && parts[embedIdx + 1]) {
+        return `https://www.youtube.com/embed/${parts[embedIdx + 1]}`;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
 type Video = {
   id_video: string;
   judul: string;
@@ -43,6 +71,7 @@ export default function VideoContainer() {
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Video | null>(null);
   const [videoUrl, setVideoUrl] = React.useState<string | null>(null);
+  const embedUrl = React.useMemo(() => getYouTubeEmbedUrl(videoUrl), [videoUrl]);
 
   const load = React.useCallback(async () => {
     try {
@@ -110,23 +139,24 @@ export default function VideoContainer() {
     }
   };
 
-  const handleSubmit = async (values: VideoFormValues, file?: File | null) => {
+  const handleSubmit = async (values: VideoFormValues) => {
     try {
       setLoading(true);
 
       const isEdit = !!editing?.id_video;
       const url = isEdit ? ApiEndpoints.UpdateVideo(editing!.id_video) : ApiEndpoints.CreateVideo;
 
-      const fd = new FormData();
-      fd.append('judul', values.judul);
-      fd.append('deskripsi', values.deskripsi);
-      fd.append('tanggal_penerbitan', dayjs(values.tanggal_penerbitan).format('YYYY-MM-DD'));
-      if (file) fd.append('file', file);
+      const payload = {
+        judul: values.judul,
+        deskripsi: values.deskripsi,
+        tanggal_penerbitan: dayjs(values.tanggal_penerbitan).format('YYYY-MM-DD'),
+        video_url: values.video_url,
+      };
 
       if (isEdit) {
-        await apiAuth.putDataPrivateWithFile(url, fd);
+        await apiAuth.putDataPrivate(url, payload);
       } else {
-        await apiAuth.postDataPrivateWithFile(url, fd);
+        await apiAuth.postDataPrivate(url, payload);
       }
 
       message.success(isEdit ? 'Video diperbarui' : 'Video ditambahkan');
@@ -312,11 +342,23 @@ export default function VideoContainer() {
         centered
       >
         {videoUrl && (
-          <video
-            src={videoUrl}
-            controls
-            style={{ width: '100%' }}
-          />
+          embedUrl ? (
+            <iframe
+              width='100%'
+              height={450}
+              src={embedUrl || undefined}
+              title='Video kesehatan'
+              allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture'
+              allowFullScreen
+              style={{ border: 0, width: '100%' }}
+            />
+          ) : (
+            <video
+              src={videoUrl}
+              controls
+              style={{ width: '100%' }}
+            />
+          )
         )}
       </Modal>
     </Space>
